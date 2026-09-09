@@ -261,7 +261,8 @@ def candidate_libraries(explicit: Optional[Path]=None) -> list[Path]:
     return out
 
 def choose_library(explicit: Optional[Path], assume_yes: bool=False) -> Path:
-    libs = candidate_libraries(explicit)
+    import ui
+    libs = ui.work("Finding game libraries", candidate_libraries, explicit)
     if not libs:
         raise RuntimeError('No Steam library was found from Steam libraryfolders.vdf or the mounted-library fallbacks.\nUse --library-root /path/to/SteamLibrary to point at it explicitly.')
     scored = sorted(libs, key=lambda p: (count_manifests(p), 'SteamLibrary' in p.name, os.access(p, os.W_OK)), reverse=True)

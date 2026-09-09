@@ -10,7 +10,7 @@ Extract the release ZIP and double-click **RUN RTXFORGE**. Or run:
 bash '/home/loew/Repos/RTXForge/START HERE.sh'
 ```
 
-Choose Install / update, choose a route, then select several game codes or type `ALL`. Review the proposed changes and type `APPLY` to install. Close the selected games first. Payloads download on first use and are verified before installation. Python 3 and a 7-Zip command are required; the desktop launcher opens an installed terminal.
+Choose Install / update, choose a route, then select several game codes or type `ALL`. Preparation runs automatically with visible progress. Review the proposed changes and answer `y` to the single final confirmation. Close the selected games first. Payloads download on first use and are verified before installation. Python 3 and a 7-Zip command are required; the desktop launcher opens an installed terminal.
 
 | Route | Behavior |
 |---|---|
@@ -19,11 +19,11 @@ Choose Install / update, choose a route, then select several game codes or type 
 
 There is no NR-only route. The v3 NR profile uses WorkingScale 0.70, DualFeature enabled and Before Upscaling disabled. Existing tuning is retained after profile migration; selecting NR + MFG always turns NR on before the next launch.
 
-**Panel fix built:** the 0.1.2 ZIP includes the verified RTXForge Windows loader. `[RTXForge] NrPanel=0` hides the NR panel for MFG Only; `1` displays it for NR + MFG. GitHub compilation and DLL identity checks passed; in-game behavior still needs verification.
+**Panel fix built:** the 0.1.3 ZIP includes the verified RTXForge Windows loader. `[RTXForge] NrPanel=0` hides the NR panel for MFG Only; `1` displays it for NR + MFG. GitHub compilation and DLL identity checks passed; in-game behavior still needs verification.
 
 ## Recovery and advanced cleanup
 
-The menu includes repair, removal of owned files, batch rollback, **global DLSS5 cleanup**, and cleanup restoration. Global cleanup is retained as a separate advanced action. It previews the two NR filenames and `_DLSS5_Backup` directories, verifies recovery copies of every candidate before removal, and requires `CLEANUP`. Recovery storage and Ada-Lab are excluded. It can affect NR installations outside RTXForge: review the candidate list.
+The menu includes repair, removal of owned files, batch rollback, **global DLSS5 cleanup**, and cleanup restoration. Global cleanup is retained as a separate advanced action. It previews the two NR filenames and `_DLSS5_Backup` directories, verifies recovery copies of every candidate before removal, and uses one yes/no confirmation. Recovery storage and Ada-Lab are excluded. It can affect NR installations outside RTXForge: review the candidate list.
 
 The default global scan covers the configured Games mount. Additional library roots can be supplied explicitly:
 
@@ -52,7 +52,7 @@ Create a JSON file such as:
 ./rtxforge install --targets targets.json
 ```
 
-Recognized existing installations can be adopted with `--adopt-existing`; confirmation then becomes `ADOPT`. Conflicting unrelated injectors still block that game. In the interactive menu, type `SKIP` to exclude blocked games, review the remaining batch, then type `APPLY`. No game is skipped silently. Use `--help` for repair, uninstall, batch-record rollback and explicit noninteractive confirmation options.
+Recognized existing installations can be adopted with `--adopt-existing`; the final yes/no prompt states that adoption is included. Conflicting unrelated injectors still block that game. In the interactive menu, blocked games are clearly listed as excluded. One final yes/no confirmation applies only the ready games. Use `--help` for repair, uninstall, batch-record rollback and explicit noninteractive confirmation options.
 
 Native game DLSS/Streamline files and launch options are not globally rewritten. The preview gives the required Proton DLL override; merge it with existing launch options manually. Native frame-generation evidence is required for either route, and detected anti-cheat blocks automatic selection.
 
@@ -65,3 +65,5 @@ The original 1.6 implementation remains preserved in the prior project; `preserv
 The active build workflow is `.github/workflows/windows-build.yml`; the bounded source patch is `build/patch_panel.py`. A downloaded build artifact can be imported with `./rtxforge import-loader --loader /path/to/extracted/artifact`. This prepares future installations; existing games must be explicitly updated.
 
 See [audit and verification](docs/AUDIT.md) and [source provenance](docs/PROVENANCE.md). Installer checks passed on disposable fixtures; in-game behavior has not been verified by this rewrite.
+
+Activity indicators show scanning, payload preparation, per-game checks, backups/installation and recovery, with elapsed time and game counts. Plain terminals receive start/completion lines instead of animation. Noninteractive command-line confirmation flags remain available for scripts.

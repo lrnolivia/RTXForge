@@ -31,7 +31,7 @@ def select_targets(args,mode):
     if args.targets:return normalize_targets(t.read_json(args.targets))
     t.need(not args.apply,'Noninteractive apply needs --targets JSON')
     lib=discovery.choose_library(P(args.library) if args.library else None,False)
-    games=discovery.discover_games(lib,discovery.discover_nonsteam_roots(lib,[P(p) for p in args.nonsteam]))
+    games=ui.work('Scanning games',lambda: discovery.discover_games(lib,discovery.discover_nonsteam_roots(lib,[P(p) for p in args.nonsteam])))
     eligible=[]
     for g in games:
         native=any(P(p).name.lower() in ('nvngx_dlssg.dll','sl.dlss_g.dll') and 'optiscaler' not in [x.lower() for x in P(p).relative_to(g.root).parts] for p in g.upscalers)
@@ -59,7 +59,7 @@ def apply_batch(c,plans):
     root=storage(c,sum(sum(P(r['source']).stat().st_size if 'source' in r else len(r.get('text','').encode()) for r in p['changes']) for p in plans)+2*1024**3)
     # Every target preflights before the first mutation; each target is rechecked by the engine.
     for p in plans:
-        t.check_plan(p)
+        ui.work('Checking before install · '+P(p['game']).name,t.check_plan,p)
         need_bytes=sum(P(r['source']).stat().st_size if 'source' in r else len(r.get('text','').encode()) for r in p['changes'])
         t.need(shutil.disk_usage(p['game']).free>need_bytes+64*1024**2,'Insufficient target space: '+p['game'])
         backup=sum((P(p['game'])/r['path']).stat().st_size for r in p['changes'] if r['before'] is not None)
@@ -75,7 +75,7 @@ def apply_batch(c,plans):
             folder=root/'transactions'/t.sha(p['game'].encode())[:20];folder.mkdir(parents=True,exist_ok=True);state=folder/(stamp+'-'+str(index))
             record['transactions'].append(str(state));t.record_write(batch/'batch.json',record)
             try:
-                t.apply_transaction(p,state);ui.line(f'✓ {index}/{len(plans)}',p['game'])
+                ui.work(f'Installing {index}/{len(plans)} · '+P(p['game']).name,t.apply_transaction,p,state)
             except BaseException:
                 record['status']='interrupted';t.record_write(batch/'batch.json',record);ui.error('Batch stopped. Earlier completed targets are recorded; recover with '+str(batch/'batch.json'));raise
         record['status']='complete';record['completed']=t.now();t.record_write(batch/'batch.json',record)
@@ -95,16 +95,17 @@ def rollback(args,c):
         if not (state/'transaction.json').exists():continue
         status=t.read_json(state/'transaction.json')['status']
         if status in ('preparing','rolled-back'):continue
-        view=t.rollback_transaction(state);states.append(state);ui.line(view['game'],str(len(view['files']))+' files to restore')
+        view=ui.work('Checking recovery · '+state.name,t.rollback_transaction,state);states.append(state);ui.line(view['game'],str(len(view['files']))+' files to restore')
     if args.dry_run or not confirm(args,'ROLLBACK'):return
     with t.transaction_lock(root/'batch-lock-context'):
-        for state in states:t.rollback_transaction(state,True)
+        for state in states:ui.work('Restoring · '+state.name,t.rollback_transaction,state,True)
         record['status']='rolled-back';record['rollback_time']=t.now();t.record_write(path,record)
     ui.line('Restored','All selected batch transactions rolled back')
 
 def confirm(args,token):
     if args.apply:t.need(args.confirm==token,'Noninteractive confirmation must be --confirm '+token);return True
-    return ui.prompt('Type '+token+' to proceed, or ENTER to cancel:')==token
+    action={'APPLY':'Apply this batch','ADOPT':'Adopt and apply this batch','ROLLBACK':'Restore this batch','CLEANUP':'Back up and remove these cleanup candidates','RESTORE':'Restore these cleanup files'}[token]
+    return ui.prompt(action+'? [y/N]').lower() in ('y','yes')
 
 def parser():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('command',nargs='?',choices=['install','repair','uninstall','rollback','prepare','import-loader','scan','preview-ui','cleanup','restore-cleanup'],default=None)
@@ -116,33 +117,33 @@ def run(args):
         roots=args.roots or [P(c['storage']['mount'])]
         ui.title('Advanced · global DLSS5 cleanup')
         ui.line('Scan roots',', '.join(str(p) for p in roots))
-        items=cleanup.discover(roots,c)
+        items=ui.work('Scanning cleanup candidates',cleanup.discover,roots,c)
         for row in items:ui.line(row['kind'],row['path'])
         ui.line('Recovery policy','Every candidate is copied and verified before removal; Ada-Lab/recovery state is excluded.')
         ui.line('Candidates',str(len(items)))
-        if items and not args.dry_run and confirm(args,'CLEANUP'):ui.line('Recovery record',cleanup.apply(c,items))
+        if items and not args.dry_run and confirm(args,'CLEANUP'):ui.line('Recovery record',ui.work('Backing up and cleaning selected files',cleanup.apply,c,items))
         return
     if args.command=='restore-cleanup':
         path=args.cleanup_record or P(ui.prompt('Cleanup recovery record path:'))
-        ui.line('Files to restore',str(cleanup.restore(c,path)))
-        if not args.dry_run and confirm(args,'RESTORE'):cleanup.restore(c,path,True);ui.line('Recovered','Cleanup restored')
+        ui.line('Files to restore',str(ui.work('Checking cleanup recovery',cleanup.restore,c,path)))
+        if not args.dry_run and confirm(args,'RESTORE'):ui.work('Restoring cleanup files',cleanup.restore,c,path,True);ui.line('Recovered','Cleanup restored')
         return
     if args.command=='preview-ui':
         ui.table([('A','Example Game','NR + MFG'),('B','Another Game','MFG Only')]);return
     if args.command=='import-loader':t.need(args.loader,'Supply --loader folder with DLL and build manifest');ui.line('Imported',packages.import_loader(c,args.loader.resolve()));return
     if args.command=='rollback':return rollback(args,c)
     mode=args.mode or (None if args.targets else choose_mode())
-    if args.command=='prepare':t.need(not args.dry_run,'Prepare is an explicit cache-writing action');packages.prepare(c,mode or 'nr-mfg');ui.line('Ready','Pinned payload verified');return
+    if args.command=='prepare':t.need(not args.dry_run,'Prepare is an explicit cache-writing action');ui.work('Preparing and verifying payload',packages.prepare,c,mode or 'nr-mfg');ui.line('Ready','Pinned payload verified');return
     targets=select_targets(args,mode)
     if args.command=='scan':ui.table([(str(i+1),r['game'],profiles.MODES[r['mode']]) for i,r in enumerate(targets)]);return
     plans=[];sources={}
     for target in targets:
         if args.command!='uninstall' and target['mode'] not in sources:
-            if not args.dry_run and not args.apply:t.need(ui.prompt('Prepare/verify '+profiles.MODES[target['mode']]+' payload on Games? [y/N]').lower()=='y','Cancelled')
-            sources[target['mode']]=packages.prepare(c,target['mode'],readonly=args.dry_run)
-    for target in targets:
+            sources[target['mode']]=ui.work('Preparing / verifying '+profiles.MODES[target['mode']]+' payload',packages.prepare,c,target['mode'],readonly=args.dry_run)
+    for index,target in enumerate(targets,1):
         try:
-            plan=planning.remove(target,root) if args.command=='uninstall' else planning.make(target,root,sources[target['mode']],args.command,args.adopt_existing)
+            label=f'Checking {index}/{len(targets)} · '+target.get('name',P(target['game']).name)
+            plan=ui.work(label,planning.remove,target,root) if args.command=='uninstall' else ui.work(label,planning.make,target,root,sources[target['mode']],args.command,args.adopt_existing)
             plans.append(plan)
         except (t.Refusal,OSError,ValueError) as ex:
             ui.error(target['game']+': '+str(ex));raise t.Refusal('Batch preflight failed; no games changed')
@@ -153,8 +154,9 @@ def run(args):
         t.need(ready and not args.apply and not args.dry_run,'Resolve conflicts or adjust the selected batch; no games changed')
         ui.line('Blocked games',str(len(blocked))+' will remain unchanged')
         ui.line('Ready games',str(len(ready)))
-        t.need(ui.prompt('Type SKIP to exclude blocked games and review the ready batch, or ENTER to cancel:')=='SKIP','Cancelled; no games changed')
-        plans=ready;preview(plans,args.details)
+        for p in blocked:ui.line('Excluded',p['game'])
+        plans=ready
+        ui.line('Apply summary',str(len(ready))+' ready games · '+str(len(blocked))+' excluded; only ready games will change')
     if args.dry_run:return
     token='ADOPT' if args.adopt_existing else 'APPLY'
     if confirm(args,token):ui.line('Batch record',apply_batch(c,plans))

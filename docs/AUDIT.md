@@ -48,3 +48,7 @@ The user's 0.1.1 report exposed overbroad conflict checks: RenoDX attribution te
 A read-only repair preflight against all 19 exact targets in the report completed: 18 ready, Forza Horizon 6 blocked by its third-party winmm.dll. No game files were written. A focused regression verified preservation of attribution text, native dependency subdirectories and identified Microsoft dbghelp.dll, while an unknown winmm.dll still blocks.
 
 GitHub Windows build 34320885964 succeeded. The artifact archive hash, x64 PE identity, embedded policy marker and DLL hash were verified; see panel-build.json. The loader was imported into RTXForge's prepared cache and bundled with 0.1.2. No installed game received it automatically.
+
+## 0.1.3 interaction update
+
+Added animated activity and elapsed time around long operations, with per-game batch counts and plain-terminal fallback. Removed the preparation prompt and separate SKIP confirmation. Excluded games are listed explicitly; the interactive batch now has one final yes/no confirmation. Cleanup and recovery also use yes/no. Command-line confirmation flags retain their existing contract. Focused checks covered default cancellation, progress completion/error cleanup and animated terminal output. No game operations were run for this UI change.

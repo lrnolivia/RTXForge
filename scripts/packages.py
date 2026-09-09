@@ -1,6 +1,7 @@
 """Pinned v3 runtime sourcing. Archives are never executed and payloads remain on Games."""
 import pathlib,json,hashlib,urllib.request,urllib.parse,subprocess,shutil,zipfile,os
 import transactions as t
+import ui
 from storage import storage
 P=pathlib.Path
 POLICY='RTXForge.NrPanel.v1'
@@ -13,7 +14,7 @@ def download(url,path,expected=None,blob=None,size=None):
         return path
     part=path.with_suffix(path.suffix+'.part');t.need(not part.exists(),'Incomplete download retained: '+str(part))
     path.parent.mkdir(parents=True,exist_ok=True)
-    print('  Downloading '+path.name+' …',flush=True)
+    ui.line('Downloading',path.name)
     with urllib.request.urlopen(url,timeout=120) as src,part.open('xb') as out:shutil.copyfileobj(src,out)
     if expected:t.need(t.digest(part)==expected,'Downloaded SHA256 mismatch')
     if size:t.need(part.stat().st_size==size,'Downloaded size mismatch')
