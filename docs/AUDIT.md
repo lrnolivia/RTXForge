@@ -36,3 +36,7 @@ The stock NR panel is visible in MFG Only. Windows build files are deliberately 
 ## Panel build activated
 
 At the user’s subsequent request, `.github/workflows/windows-build.yml` now builds the bounded patch on Windows 2022 from the same pinned upstream commit. The historical deferred status above describes the initial release. The patch reads `[RTXForge] NrPanel` once when the panel would first render; subsequent in-game NR effect toggles do not change panel visibility. Missing settings preserve upstream visibility. Import verifies build policy, upstream commit, SHA-256 and the embedded policy marker. Runtime panel behavior still requires game verification.
+
+## Repair crash correction
+
+Legacy manifest import referenced `re.fullmatch` without importing `re`, causing a NameError after game selection. The missing import is fixed. Focused Linux and Windows legacy-manifest regression checks pass. Unexpected menu exceptions now retain the traceback and return to the menu rather than closing the terminal.

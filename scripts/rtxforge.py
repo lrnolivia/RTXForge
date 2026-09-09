@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """RTXForge — a batch installer for two explicit RTX routes, built for Linux."""
 from __future__ import annotations
-import argparse,pathlib,json,sys,os,uuid,datetime,shutil,subprocess
+import argparse,pathlib,json,sys,os,uuid,datetime,shutil,subprocess,traceback
 import ui,profiles,packages,planning,discovery,cleanup
 import transactions as t
 from storage import storage
@@ -164,6 +164,8 @@ def main(argv=None):
             args.command={'1':'install','2':'repair','3':'uninstall','4':'rollback','5':'prepare','6':'cleanup','7':'restore-cleanup'}[choice]
             try:run(args)
             except (t.Refusal,RuntimeError,OSError,ValueError,KeyError,subprocess.SubprocessError) as ex:ui.error(ex)
+            except Exception as ex:
+                ui.error('Unexpected error: '+str(ex));traceback.print_exc()
             args.command=None;ui.prompt('Press ENTER to return to the menu.')
     except (t.Refusal,RuntimeError,OSError,ValueError,KeyError,subprocess.SubprocessError) as ex:ui.error(ex);return 2
     except (KeyboardInterrupt,EOFError):print('\nCancelled.');return 130
