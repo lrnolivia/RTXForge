@@ -79,6 +79,10 @@ def prepare(c,mode,readonly=False):
     else:
         sources.pop('nvngx.dll_dlssnr.dll',None)
     custom=root/'loader/rtxforge-loader.json'
+    bundled=P(__file__).resolve().parents[1]/'bundled-loader/rtxforge-loader.json'
+    if not custom.exists() and bundled.exists():
+        custom=bundled
+        t.need(t.read_json(custom)['sha256']==c.get('bundled_loader_sha256'),'Bundled loader is not the pinned RTXForge build')
     if custom.exists():
         meta=t.read_json(custom);dll=custom.parent/'OptiScaler.dll';t.need(meta['policy']==POLICY and meta['upstream_commit']==c['commit'] and t.digest(dll)==meta['sha256'],'Custom loader identity mismatch');sources['OptiScaler.dll']=(dll,meta['sha256'])
     # Imported builds enforce NrPanel; stock builds keep the inactive panel.

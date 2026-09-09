@@ -19,7 +19,7 @@ Choose Install / update, choose a route, then select several game codes or type 
 
 There is no NR-only route. The v3 NR profile uses WorkingScale 0.70, DualFeature enabled and Before Upscaling disabled. Existing tuning is retained after profile migration; selecting NR + MFG always turns NR on before the next launch.
 
-**Panel fix:** the Windows build is now enabled in GitHub Actions. Its custom loader reads `[RTXForge] NrPanel`: `0` hides the NR panel for MFG Only, and `1` displays it for NR + MFG. Until a verified custom loader is imported, the stock binary still displays its inactive panel.
+**Panel fix built:** the 0.1.2 ZIP includes the verified RTXForge Windows loader. `[RTXForge] NrPanel=0` hides the NR panel for MFG Only; `1` displays it for NR + MFG. GitHub compilation and DLL identity checks passed; in-game behavior still needs verification.
 
 ## Recovery and advanced cleanup
 
@@ -52,7 +52,7 @@ Create a JSON file such as:
 ./rtxforge install --targets targets.json
 ```
 
-Recognized existing installations can be adopted with `--adopt-existing`; confirmation then becomes `ADOPT`. Conflicting unrelated injectors still block. Use `--help` for repair, uninstall, batch-record rollback and explicit noninteractive confirmation options.
+Recognized existing installations can be adopted with `--adopt-existing`; confirmation then becomes `ADOPT`. Conflicting unrelated injectors still block that game. In the interactive menu, type `SKIP` to exclude blocked games, review the remaining batch, then type `APPLY`. No game is skipped silently. Use `--help` for repair, uninstall, batch-record rollback and explicit noninteractive confirmation options.
 
 Native game DLSS/Streamline files and launch options are not globally rewritten. The preview gives the required Proton DLL override; merge it with existing launch options manually. Native frame-generation evidence is required for either route, and detected anti-cheat blocks automatic selection.
 

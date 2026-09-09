@@ -1,11 +1,19 @@
 """Read-only batch preflight, exact paths and fingerprints. No game mutation here."""
-import pathlib,json
+import pathlib,json,re
 import transactions as t
 import profiles
 from ownership import import_record
 P=pathlib.Path
 NR={'nvngx_dlssnr.dll','nvngx.dll_dlssnr.dll'}
 MARKERS={'optiscaler_nr_mfg_bazzite.txt','optiscaler_dlss5_mfg_autoinstall.txt'}
+def native_debug_helper(path):
+    # Identification for preserving a game dependency, never permission to overwrite it.
+    if path.name.lower()!='dbghelp.dll' or path.stat().st_size>20*1024**2:return False
+    data=path.read_bytes()
+    fields=[v.decode('utf-16le') for v in re.findall(rb'(?:[\x20-\x7e]\x00){5,}',data)]
+    pairs=dict(zip(fields,fields[1:]))
+    return pairs.get('CompanyName')=='Microsoft Corporation' and pairs.get('OriginalFilename','').lower()=='dbghelp.dll' and pairs.get('FileDescription')=='Windows Image Helper'
+
 def history(state,game,all_status=False):
     root=state/'transactions'/t.sha(str(game).encode())[:20]
     return sorted((p for p in root.glob('*/transaction.json') if all_status or t.read_json(p).get('status')=='complete'),reverse=True)
@@ -35,6 +43,8 @@ def make(target,state,sources,operation='install',adopt=False):
     for r in files:
         t.need(not any(name in r for name in ('easyanticheat','battleye','eaanticheat','anticheatexpert','start_protected_game')),'Anti-cheat evidence: '+r)
     proxies=[r for r in files.values() if P(r).parent==directory and P(r).name.lower() in t.PROXIES]
+    preserved_helpers={r for r in proxies if r not in owned and native_debug_helper(game/r)}
+    proxies=[r for r in proxies if r not in preserved_helpers]
     proxy=target.get('proxy') or (P(proxies[0]).name.lower() if len(proxies)==1 else 'dxgi.dll')
     t.need(proxy in t.SUPPORTED_PROXIES,'Unsupported existing alias; select dxgi/winmm/version explicitly')
     t.need(target.get('api','dx12')!='vulkan' or proxy!='dxgi.dll','Native Vulkan needs an imported winmm/version alias')
@@ -52,11 +62,15 @@ def make(target,state,sources,operation='install',adopt=False):
     conflicts=[];inputs={str(game/exe):t.digest(game/exe)}
     if origin:inputs[str(origin)]=t.digest(origin)
     for r in native:inputs[str(game/r)]=t.digest(game/r)
+    for rel in preserved_helpers:inputs[str(game/rel)]=t.digest(game/rel)
     for rel in files.values():
         n=P(rel).name.lower()
+        # Only active binaries beside this executable participate in proxy conflicts.
+        # Licenses, other executables and engine redistributables are not injectors.
+        if P(rel).parent!=directory or rel in preserved_helpers:continue
         if n in {'dlssg_to_fsr3_amd_is_better.dll','dlss-enabler-headless.dll'} and rel.casefold()!=(prefix+'OptiScaler/dlss-enabler-headless.dll').casefold():
             conflicts.append('Competing frame-generation provider: '+rel)
-        provider=n in t.PROXIES|{'nvngx.dll','nvapi64.dll','optiscaler.dll'} or n.endswith(('.asi','.addon32','.addon64')) or 'renodx' in n
+        provider=n in t.PROXIES|{'nvngx.dll','nvapi64.dll','optiscaler.dll'} or n.endswith(('.asi','.addon32','.addon64')) or (n.endswith('.dll') and 'renodx' in n)
         if provider and (rel not in owned or n not in t.PROXIES|{'optiscaler.dll'}):conflicts.append('Competing/unowned graphics file: '+rel)
     template=P(sources['OptiScaler.ini'][0]).read_text(encoding='utf-8-sig');old=ini.read_text(encoding='utf-8-sig') if ini.is_file() else None
     text=profiles.render(template,old,mode);wanted[prefix+'OptiScaler.ini']={'text':text,'hash':t.sha(text.encode())}
@@ -89,7 +103,7 @@ def make(target,state,sources,operation='install',adopt=False):
         for n in NR:
             actual=files.get((prefix+n).casefold())
             if actual and actual.casefold() not in changed:changes.append({'path':actual,'before':t.digest(game/actual),'after':None})
-    return finalize({'schema':1,'observed_utc':t.now(),'game':str(game),'exe':exe,'mode':mode,'operation':operation,'listing':files,'inputs':inputs,'changes':changes,'managed':managed,'conflicts':conflicts,'proxy':proxy,'nr_panel':'visible' if mode=='nr-mfg' else 'stock inactive panel remains (custom build deferred)'})
+    return finalize({'schema':1,'observed_utc':t.now(),'game':str(game),'exe':exe,'mode':mode,'operation':operation,'listing':files,'inputs':inputs,'changes':changes,'managed':managed,'conflicts':conflicts,'proxy':proxy,'nr_panel':'visible' if mode=='nr-mfg' else 'hidden with RTXForge loader'})
 
 def remove(target,state):
     game=t.safe(target['game']);exe=target['exe'];t.relative(exe);owned,origin=owned_files(target,state,game,exe);t.need(owned,'No ownership record; no broad cleanup is performed')

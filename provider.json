@@ -34,5 +34,6 @@
     "tag": "v0.3.0",
     "asset": "dlss-unlocked-standalone-v0.3.0.zip",
     "sha256": "adf6b2cdcb0b57f3d04fae095135615c9c9f8c6fc8b2bdeccf01cf62672c5183"
-  }
+  },
+  "bundled_loader_sha256": "cb46df91759b8edae6ac4df0af990132a2b256f70c55ed54f36ba27dc89152e8"
 }

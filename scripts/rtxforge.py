@@ -129,7 +129,7 @@ def run(args):
         return
     if args.command=='preview-ui':
         ui.table([('A','Example Game','NR + MFG'),('B','Another Game','MFG Only')]);return
-    if args.command=='import-loader':t.need(args.loader,'Supply --loader folder with DLL and build manifest');ui.line('Imported',packages.import_loader(c,args.loader));return
+    if args.command=='import-loader':t.need(args.loader,'Supply --loader folder with DLL and build manifest');ui.line('Imported',packages.import_loader(c,args.loader.resolve()));return
     if args.command=='rollback':return rollback(args,c)
     mode=args.mode or (None if args.targets else choose_mode())
     if args.command=='prepare':t.need(not args.dry_run,'Prepare is an explicit cache-writing action');packages.prepare(c,mode or 'nr-mfg');ui.line('Ready','Pinned payload verified');return
@@ -146,7 +146,15 @@ def run(args):
             plans.append(plan)
         except (t.Refusal,OSError,ValueError) as ex:
             ui.error(target['game']+': '+str(ex));raise t.Refusal('Batch preflight failed; no games changed')
-    preview(plans,args.details);t.need(all(not p['conflicts'] for p in plans),'Resolve conflicts or adjust the selected batch; no games changed')
+    preview(plans,args.details)
+    blocked=[p for p in plans if p['conflicts']]
+    if blocked:
+        ready=[p for p in plans if not p['conflicts']]
+        t.need(ready and not args.apply and not args.dry_run,'Resolve conflicts or adjust the selected batch; no games changed')
+        ui.line('Blocked games',str(len(blocked))+' will remain unchanged')
+        ui.line('Ready games',str(len(ready)))
+        t.need(ui.prompt('Type SKIP to exclude blocked games and review the ready batch, or ENTER to cancel:')=='SKIP','Cancelled; no games changed')
+        plans=ready;preview(plans,args.details)
     if args.dry_run:return
     token='ADOPT' if args.adopt_existing else 'APPLY'
     if confirm(args,token):ui.line('Batch record',apply_batch(c,plans))
