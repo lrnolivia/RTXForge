@@ -32,3 +32,7 @@ Local reports:
 ## Remaining limits
 
 The stock NR panel is visible in MFG Only. Windows build files are deliberately inactive. Linux storage defaults are machine-specific configuration, with no general Windows storage adapter yet. The installer does not set launch options automatically or establish game compatibility from successful file deployment. A batch is recoverable per target, not an all-games atomic transaction. Stale operation locks require inspection of recovery state before manual removal.
+
+## Panel build activated
+
+At the user’s subsequent request, `.github/workflows/windows-build.yml` now builds the bounded patch on Windows 2022 from the same pinned upstream commit. The historical deferred status above describes the initial release. The patch reads `[RTXForge] NrPanel` once when the panel would first render; subsequent in-game NR effect toggles do not change panel visibility. Missing settings preserve upstream visibility. Import verifies build policy, upstream commit, SHA-256 and the embedded policy marker. Runtime panel behavior still requires game verification.

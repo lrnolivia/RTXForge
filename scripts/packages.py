@@ -80,9 +80,8 @@ def prepare(c,mode,readonly=False):
         sources.pop('nvngx.dll_dlssnr.dll',None)
     custom=root/'loader/rtxforge-loader.json'
     if custom.exists():
-        meta=t.read_json(custom);dll=custom.parent/'OptiScaler.dll';t.need(meta['policy']==POLICY and t.digest(dll)==meta['sha256'],'Custom loader identity mismatch');sources['OptiScaler.dll']=(dll,meta['sha256'])
-    # User deferred the panel build: stock loader remains usable in both routes.
-    # MFG Only has no NR DLLs but retains the stock inactive NR panel.
+        meta=t.read_json(custom);dll=custom.parent/'OptiScaler.dll';t.need(meta['policy']==POLICY and meta['upstream_commit']==c['commit'] and t.digest(dll)==meta['sha256'],'Custom loader identity mismatch');sources['OptiScaler.dll']=(dll,meta['sha256'])
+    # Imported builds enforce NrPanel; stock builds keep the inactive panel.
     return sources
 
 def import_loader(c,folder):

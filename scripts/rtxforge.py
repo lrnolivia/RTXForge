@@ -24,7 +24,7 @@ def normalize_targets(rows):
     return result
 
 def choose_mode():
-    ui.title('Choose your stack');ui.line('1 · NR + MFG','Neural Rendering enabled at install + headless MFG');ui.line('2 · MFG Only','Headless MFG · no NR DLLs · stock inactive NR panel')
+    ui.title('Choose your stack');ui.line('1 · NR + MFG','Neural Rendering enabled at install + headless MFG');ui.line('2 · MFG Only','Headless MFG · no NR DLLs · panel hidden with RTXForge loader')
     choice=ui.prompt('Route [1/2]:');t.need(choice in ('1','2'),'No route selected');return 'nr-mfg' if choice=='1' else 'mfg-only'
 
 def select_targets(args,mode):
@@ -49,7 +49,7 @@ def preview(plans,details=False):
         ui.line(str(i)+' · '+profiles.MODES[p['mode']],p['game']);ui.line('Executable',p['exe']);ui.line('Changes',f'{add} add · {replace} replace · {remove} back up/remove')
         if p.get('proxy'):ui.line('Proton override',P(p['proxy']).stem+'=n,b — merge manually; launch options untouched')
         if p['mode']=='nr-mfg':ui.line('NR at startup','Enabled · WorkingScale 0.70 · v3 profile')
-        else:ui.line('NR components','Absent; inactive stock panel remains (custom build deferred)')
+        else:ui.line('NR components','Absent; panel hidden with RTXForge loader (stock loader keeps inactive panel)')
         for message in p['conflicts']:ui.error(message)
         if details:
             for r in p['changes']:ui.line(r['path'],str(r['before'])+' → '+str(r['after']))

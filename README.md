@@ -19,7 +19,7 @@ Choose Install / update, choose a route, then select several game codes or type 
 
 There is no NR-only route. The v3 NR profile uses WorkingScale 0.70, DualFeature enabled and Before Upscaling disabled. Existing tuning is retained after profile migration; selecting NR + MFG always turns NR on before the next launch.
 
-**Panel fix deferred:** the stock y4my binary still displays its inactive NR panel in MFG Only. The optional source patch and Windows build workflow are preserved under `build/`, but are not activated.
+**Panel fix:** the Windows build is now enabled in GitHub Actions. Its custom loader reads `[RTXForge] NrPanel`: `0` hides the NR panel for MFG Only, and `1` displays it for NR + MFG. Until a verified custom loader is imported, the stock binary still displays its inactive panel.
 
 ## Recovery and advanced cleanup
 
@@ -61,5 +61,7 @@ Native game DLSS/Streamline files and launch options are not globally rewritten.
 This delivered configuration is pinned to Lauren's Btrfs Games drive and its UUID. Cache, backups and journals live in `/var/mnt/Games/Ada-Lab/RTXForge`, with a 100 GiB reserve. No fallback to the system drive is allowed. Another machine must explicitly configure `provider.json` (mount, UUID, root beneath that mount's `Ada-Lab`, and reserve) or pass `--provider` with an adapted file. The storage adapter is separate from the reusable installer core. Native Windows operation and Flatpak packaging are future work.
 
 The original 1.6 implementation remains preserved in the prior project; `preserved-1.6.json` records its location and archive hash for the future native app. It is not the active installer.
+
+The active build workflow is `.github/workflows/windows-build.yml`; the bounded source patch is `build/patch_panel.py`. A downloaded build artifact can be imported with `./rtxforge import-loader --loader /path/to/extracted/artifact`. This prepares future installations; existing games must be explicitly updated.
 
 See [audit and verification](docs/AUDIT.md) and [source provenance](docs/PROVENANCE.md). Installer checks passed on disposable fixtures; in-game behavior has not been verified by this rewrite.
