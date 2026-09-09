@@ -15,7 +15,7 @@ def load_provider(path=None):
     return c
 
 def normalize_targets(rows):
-    t.need(isinstance(rows,list) and 0<len(rows)<=100,'Select 1–100 explicit targets')
+    t.need(isinstance(rows,list) and 0<len(rows)<=10000,'Select 1–10,000 explicit targets')
     result=[];seen=[]
     for row in rows:
         game=t.safe(row['game']);t.relative(row['exe']);t.need(row['mode'] in profiles.MODES,'Only NR + MFG or MFG Only are supported')

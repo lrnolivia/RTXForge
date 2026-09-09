@@ -4,7 +4,9 @@
 
 ## Native GNOME desktop
 
-The **0.2.0 GNOME preview** adds a native GTK 4/libadwaita interface. Extract the package and double-click **RUN RTXFORGE GUI**. Select games with checkboxes, review once, then click Apply. Live progress, repair, recovery and global cleanup are included. The CLI remains available. See [desktop guide and platform sequence](docs/DESKTOP.md).
+**0.3.0** adds a unified poster library, automatic keyless SteamGridDB covers, metadata, profile buttons, floating action panels, one-click whole-library install/uninstall and expanded settings. It uses solid colors and defaults to tall posters; capsules and list views are available. Hardware prerequisites are checked before installation.
+
+Extract and double-click **RUN RTXFORGE GUI**. See [desktop guide](docs/DESKTOP.md). The custom repository option is a future UI placeholder only.
 
 ## Run the CLI
 

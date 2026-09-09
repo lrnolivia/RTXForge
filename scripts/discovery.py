@@ -417,7 +417,7 @@ def inspect_game(game: Game) -> Game:
     game.mode = 'DLSS NR + native-game DLSS-G + Ada MFG unlock' if game.has_mfg else 'DLSS NR only'
     return game
 
-def discover_games(library: Path, nonsteam_roots: list[Path]) -> list[Game]:
+def discover_games(library: Path, nonsteam_roots: list[Path], include_unavailable: bool=False) -> list[Game]:
     games: list[Game] = []
     steamapps = library / 'steamapps'
     common = steamapps / 'common'
@@ -438,7 +438,7 @@ def discover_games(library: Path, nonsteam_roots: list[Path]) -> list[Game]:
     inspected: list[Game] = []
     for g in games:
         g = inspect_game(g)
-        if g.exe and g.upscalers:
+        if include_unavailable or (g.exe and g.upscalers):
             inspected.append(g)
     inspected.sort(key=lambda g: (g.type != 'Steam', g.name.lower()))
     for i, g in enumerate(inspected):

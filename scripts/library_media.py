@@ -1,0 +1,98 @@
+"""Optional library artwork/metadata. Never participates in an installation decision."""
+from pathlib import Path
+import json,urllib.request,urllib.parse,urllib.error,re,time,hashlib,html
+import transactions as t
+from storage import storage
+DEFAULTS={'dark':True,'library_view':'posters','art_scale':100,'cache_days':7,'network_timeout':10,'default_profile':'mfg-only','online_art':True,'steam_metadata':True,'recognize_previous':False,'extra_folders':[]}
+
+def settings_path(config):return storage(config)/'desktop/settings.json'
+def load_settings(config):
+    try:return {**DEFAULTS,**json.loads(settings_path(config).read_text())}
+    except (OSError,ValueError,t.Refusal):return {**DEFAULTS,'extra_folders':[]}
+def save_settings(config,settings):
+    path=settings_path(config);t.atomic_file(path,json.dumps({k:settings[k] for k in DEFAULTS},indent=2).encode(),0o600)
+
+ALLOWED={'www.steamgriddb.com','cdn2.steamgriddb.com','cdn.steamgriddb.com','store.steampowered.com','shared.akamai.steamstatic.com','shared.fastly.steamstatic.com','cdn.akamai.steamstatic.com','cdn.cloudflare.steamstatic.com'}
+def allowed(url):
+    u=urllib.parse.urlparse(url)
+    if u.scheme!='https' or u.hostname not in ALLOWED or u.username or u.password:raise ValueError('Unsupported artwork address')
+class Redirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        allowed(newurl)
+        if req.has_header('Authorization') and urllib.parse.urlparse(newurl).hostname!=urllib.parse.urlparse(req.full_url).hostname:raise ValueError('Authentication redirect refused')
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+def request(url,limit=3*1024**2,payload=None,timeout=10):
+    allowed(url);headers={'User-Agent':'RTXForge/0.3.0 (Linux desktop)'}
+    if payload is not None:headers['Content-Type']='application/json'
+    with urllib.request.build_opener(Redirect).open(urllib.request.Request(url,headers=headers,data=json.dumps(payload).encode() if payload is not None else None),timeout=timeout) as response:
+        data=response.read(limit+1)
+        if len(data)>limit:raise ValueError('Artwork response too large')
+        return data
+
+def json_request(url,payload=None,timeout=10):return json.loads(request(url,payload=payload,timeout=timeout))
+def normalized(text):return re.sub(r'[^a-z0-9]','',text.casefold())
+
+class LibraryMedia:
+    def __init__(self,config,settings):
+        self.root=storage(config)/'desktop/media';self.settings=settings
+
+    def enrich(self,row,refresh=False):
+        ident=hashlib.sha256((str(row.get('appid') or '')+row['name']).encode()).hexdigest()[:24]
+        record=self.root/(ident+'.json');result={};errors=[]
+        timeout=max(5,min(30,int(self.settings.get('network_timeout',10))))
+        if record.exists():
+            try:
+                saved=json.loads(record.read_text());result=saved['data']
+                if not refresh and saved.get('provider')=='sgdb-public-v1' and time.time()-saved['time']<int(self.settings.get('cache_days',7))*86400 and (self.settings.get('library_view')!='capsules' or result.get('capsule')) and (not result.get('poster') or Path(result['poster']).is_file()):return result
+            except (OSError,ValueError,KeyError):result={}
+        appid=str(row.get('appid') or '')
+        if not appid.isdigit():appid=''
+        if not self.settings['online_art']:return result
+        if appid and self.settings['steam_metadata']:
+            try:
+                response=json_request('https://store.steampowered.com/api/appdetails?'+urllib.parse.urlencode({'appids':appid,'l':'english','filters':'basic,genres,developers,release_date'})).get(appid,{})
+                if response.get('success'):
+                    data=response['data'];result.update({'description':html.unescape(re.sub('<[^>]+>','',data.get('short_description',''))),'developers':', '.join(data.get('developers',[])),'genres':', '.join(g['description'] for g in data.get('genres',[])[:3]),'release':data.get('release_date',{}).get('date',''),'metadata_source':'Steam','capsule_url':data.get('header_image','')})
+            except Exception:errors.append('Steam metadata unavailable')
+        image_url='';credit='';link=''
+        try:
+            base='https://www.steamgriddb.com/api/public/'
+            matches=json_request(base+'search/autocomplete?'+urllib.parse.urlencode({'term':row['name'].lower()})).get('data',[])
+            exact=[m for m in matches if normalized(m['name'])==normalized(row['name'])]
+            if len(exact)==1:
+                game=exact[0];game_id=int(game['id'])
+                payload={'asset_type':'grid','game_id':[game_id],'page':0,'limit':8,'styles':['all'],'dimensions':['600x900'],'formats':['all'],'languages':['all'],'order':'score_desc','static':True,'animated':False,'nsfw':False,'humor':False,'epilepsy':False,'untagged':True}
+                grids=json_request(base+'search/assets',payload,timeout=timeout).get('data',{}).get('assets',[])
+                grids=[g for g in grids if not any(g.get(k) for k in ('nsfw','humor','epilepsy','is_animated','is_deleted','processing')) and g.get('width')==600 and g.get('height')==900]
+                if grids:
+                    grid=grids[0];image_url=grid['url'];credit='SteamGridDB · '+grid.get('author',{}).get('name','Community artwork');link='https://www.steamgriddb.com/grid/'+str(int(grid['id']))
+                result['sgdb_game_id']=game_id
+                if not result.get('release') and game.get('release_date'):
+                    result['release']=time.strftime('%Y',time.gmtime(game['release_date']))
+            else:errors.append('No unique SteamGridDB title match')
+        except Exception:errors.append('SteamGridDB temporarily unavailable')
+        candidates=[(image_url,credit,link)] if image_url else []
+        if appid:candidates.append((f'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/library_600x900.jpg','Steam','https://store.steampowered.com/app/'+appid))
+        for url,credit,link in candidates:
+            try:
+                image=request(url,limit=8*1024**2,timeout=timeout)
+                if not (image.startswith(b'\x89PNG\r\n') or image.startswith(b'\xff\xd8') or image[:4]==b'RIFF'):raise ValueError('Unsupported image')
+                path=self.root/(ident+'.image');t.atomic_file(path,image,0o600)
+                result.update({'poster':str(path),'art_credit':credit,'art_link':link});break
+            except Exception:errors.append('Artwork unavailable')
+        if self.settings.get('library_view')=='capsules':
+            wide_url=result.get('capsule_url','')
+            try:
+                if result.get('sgdb_game_id'):
+                    wide_payload={'asset_type':'grid','game_id':[result['sgdb_game_id']],'page':0,'limit':4,'dimensions':['920x430'],'static':True,'animated':False,'nsfw':False,'humor':False,'epilepsy':False,'untagged':True}
+                    wide=json_request('https://www.steamgriddb.com/api/public/search/assets',wide_payload,timeout=timeout).get('data',{}).get('assets',[])
+                    wide=[g for g in wide if not any(g.get(k) for k in ('nsfw','humor','epilepsy','is_animated','is_deleted'))]
+                    if wide:wide_url=wide[0]['url'];result['capsule_credit']='SteamGridDB · '+wide[0].get('author',{}).get('name','Community artwork')
+                if wide_url:
+                    data=request(wide_url,limit=8*1024**2,timeout=timeout);path=self.root/(ident+'.wide');t.atomic_file(path,data,0o600);result['capsule']=str(path)
+            except Exception:pass
+        if errors:result['media_note']='; '.join(dict.fromkeys(errors))
+        else:result.pop('media_note',None)
+        t.atomic_file(record,json.dumps({'time':time.time(),'provider':'sgdb-public-v1','data':result}).encode(),0o600)
+        return result
