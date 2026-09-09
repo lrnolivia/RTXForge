@@ -2,7 +2,11 @@
 
 **GeForce tools, built for Linux.** A colorful batch installer for the supplied Bazzite v3 headless OptiScaler stack, rewritten in Python with explicit previews, backups and rollback.
 
-## Run it
+## Native GNOME desktop
+
+The **0.2.0 GNOME preview** adds a native GTK 4/libadwaita interface. Extract the package and double-click **RUN RTXFORGE GUI**. Select games with checkboxes, review once, then click Apply. Live progress, repair, recovery and global cleanup are included. The CLI remains available. See [desktop guide and platform sequence](docs/DESKTOP.md).
+
+## Run the CLI
 
 Extract the release ZIP and double-click **RUN RTXFORGE**. Or run:
 

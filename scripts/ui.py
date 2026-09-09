@@ -1,10 +1,10 @@
 """Small accessible ANSI interface; no network/UI dependencies."""
-import os,sys,re,time,threading,shutil
+import os,sys,re,time,threading,shutil,contextvars,contextlib
 COLORS={'green':'38;2;118;185;0','cyan':'38;2;93;220;232','red':'38;2;255;111;105','dim':'2','bold':'1'}
 def clean(value):return re.sub(r'[\x00-\x1f\x7f-\x9f]',' ',str(value))
 def style(text,color='green'):
     text=clean(text)
-    return '\033['+COLORS[color]+'m'+text+'\033[0m' if sys.stdout.isatty() and not os.environ.get('NO_COLOR') else text
+    return '\033['+COLORS[color]+'m'+text+'\033[0m' if sys.stdout.isatty() and not os.environ.get('NO_COLOR') and not _reporter.get() else text
 
 def banner():
     print('\n'+style('  RTXForge','bold')+'  '+style('GEFORCE TOOLS · BUILT FOR LINUX','green'))
@@ -27,10 +27,19 @@ def selection(raw,codes):
     return chosen
 
 
+_reporter=contextvars.ContextVar('rtxforge_reporter',default=None)
+@contextlib.contextmanager
+def report_to(callback):
+    token=_reporter.set(callback)
+    try:yield
+    finally:_reporter.reset(token)
+
 _display_lock=threading.RLock()
 _active=False
 
 def emit(*args,**kwargs):
+    if _reporter.get():
+        _reporter.get()({'kind':'log','text':clean(' '.join(str(a) for a in args))});return
     with _display_lock:
         if _active:sys.stdout.write('\r\033[2K');sys.stdout.flush()
         print(*args,**kwargs,flush=True)
@@ -39,6 +48,14 @@ def work(label,action,*args,**kwargs):
     """Animate display only; all file operations remain on the calling thread."""
     global _active
     label=clean(label);started=time.monotonic();stop=threading.Event()
+    if _reporter.get():
+        report=_reporter.get();report({'kind':'progress','label':label})
+        try:
+            result=action(*args,**kwargs)
+        except BaseException:
+            report({'kind':'log','text':'Failed: '+label});raise
+        report({'kind':'log','text':f'Completed: {label} ({time.monotonic()-started:.1f}s)'})
+        return result
     animated=sys.stdout.isatty() and os.environ.get('TERM')!='dumb'
     frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     def draw(frame):
