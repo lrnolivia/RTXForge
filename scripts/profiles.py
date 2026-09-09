@@ -30,7 +30,7 @@ def render(template,existing,mode):
     # Selection is an explicit request to install this effect already on/off, never hot-enable it.
     put('DlssNr',{'Enabled':str(nr).lower()})
     if nr:put('DlssNr',{'WorkingScale':'0.70'})
-    put('RTXForge',{'Mode':mode,'NrPanel':'1' if nr else '0'})
+    put('RTXForge',{'Pipeline':'nvngx-headless-nr-separate-v1','Mode':mode,'NrPanel':'1' if nr else '0'})
     if not old:
         put('Menu',{'OverlayMenu':'true'});put('Log',{'LogToFile':'true','LogLevel':'2'})
     t.ini(text)

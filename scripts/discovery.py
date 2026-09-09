@@ -417,13 +417,23 @@ def inspect_game(game: Game) -> Game:
     game.mode = 'DLSS NR + native-game DLSS-G + Ada MFG unlock' if game.has_mfg else 'DLSS NR only'
     return game
 
+def is_library_tool(name, appid=None):
+    """Conservative local exclusions; do not require network metadata to scan."""
+    if str(appid) in {'993090', '431960', '250820', '228980', '1070560', '1391110', '1628350', '1493710'}:
+        return True
+    name = name.casefold().strip()
+    return bool(re.match(r'^(?:proton(?:\s|$|[-_])|steam linux runtime(?:\s|$)|steamworks shared(?:\s|$)|steamworks common redistributables$|steam runtime(?:\s|$)|soldier$|sniper$)', name)) or name in {
+        'lossless scaling', 'wallpaper engine', 'steamvr', 'retroarch',
+        'obs studio', 'blender', 'fps monitor', 'displayfusion', 'borderless gaming',
+    }
+
 def discover_games(library: Path, nonsteam_roots: list[Path], include_unavailable: bool=False) -> list[Game]:
     games: list[Game] = []
     steamapps = library / 'steamapps'
     common = steamapps / 'common'
     for mf in sorted(steamapps.glob('appmanifest_*.acf')):
         data = parse_appmanifest(mf)
-        if not data:
+        if not data or is_library_tool(data['name'], data['appid']):
             continue
         root = common / data['installdir']
         if root.is_dir():
@@ -431,7 +441,7 @@ def discover_games(library: Path, nonsteam_roots: list[Path], include_unavailabl
     for nsroot in nonsteam_roots:
         try:
             for child in sorted(nsroot.iterdir(), key=lambda p: p.name.lower()):
-                if child.is_dir() and (not child.name.startswith('.')):
+                if child.is_dir() and (not child.name.startswith('.')) and not is_library_tool(child.name):
                     games.append(Game('', child.name, str(child), 'Non-Steam'))
         except (OSError, PermissionError):
             pass

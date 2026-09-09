@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Native GNOME poster library. All engine work is serialized off the GTK thread."""
 from pathlib import Path
-import sys,threading,time,traceback,argparse,datetime
+import sys,threading,time,traceback,argparse,datetime,colorsys
+from collections import Counter
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'scripts'))
 import gi
 gi.require_version('Gtk','4.0');gi.require_version('Adw','1')
@@ -9,23 +10,52 @@ from gi.repository import Gtk,Adw,GLib,Gio,Gdk,Graphene,Pango,GdkPixbuf
 import ui,library_media
 from desktop_service import DesktopService
 
+ACCENT_PROVIDERS={}
+def artwork_accent(path):
+    pix=GdkPixbuf.Pixbuf.new_from_file_at_scale(path,32,32,True)
+    data=pix.get_pixels();stride=pix.get_rowstride();channels=pix.get_n_channels();colors=Counter()
+    for y in range(pix.get_height()):
+        for x in range(pix.get_width()):
+            off=y*stride+x*channels
+            if channels==4 and data[off+3]<128:continue
+            rgb=tuple(data[off+k]/255 for k in range(3));h,s,v=colorsys.rgb_to_hsv(*rgb)
+            if s>.25 and .2<v<.98:colors[int(h*24)]+=s*v
+    hue=(colors.most_common(1)[0][0]+.5)/24 if colors else .23
+    rgb=tuple(round(v*255) for v in colorsys.hsv_to_rgb(hue,.62,.90))
+    color='#%02x%02x%02x'%rgb;name='art-'+color[1:]
+    if name not in ACCENT_PROVIDERS:
+        provider=Gtk.CssProvider()
+        provider.load_from_data((f'.game-card.{name}.selected {{ border-color: {color}; box-shadow: 0 2px 12px alpha({color},0.28); }} '
+            f'.game-card.{name}:hover {{ border-color: alpha({color},0.65); }} '
+            f'.{name} check:checked, .{name} button.suggested-action {{ background: {color}; color: #101010; }} '
+            f'.{name} .cover-badge {{ color: {color}; }} '
+            f'.{name} button:focus-visible {{ outline-color: {color}; }}').encode())
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION+1)
+        ACCENT_PROVIDERS[name]=provider
+    return name
+
+class CoverPicture(Gtk.Picture):
+    # Keep original image pixels without allowing their intrinsic size to widen the grid.
+    def do_measure(self, orientation, for_size):
+        return (0, 0, -1, -1)
+
 CSS=b'''
 .hero-title { font-size: 29px; font-weight: 800; letter-spacing: -0.8px; }
-.eyebrow { color: #bdd897; font-weight: 800; font-size: 10px; letter-spacing: 2px; }
+.eyebrow { color: #76b900; font-weight: 800; font-size: 10px; letter-spacing: 2px; }
 .hero { background: alpha(@window_fg_color,0.045); border: 1px solid alpha(@window_fg_color,0.06); border-radius: 18px; padding: 20px 24px; }
-.forge-primary { background: #bdd897; color: #1c2316; font-weight: 800; padding: 10px 18px; }
-.forge-primary:hover { background: #dcefc1; }
+.forge-primary { background: #76b900; color: #111508; font-weight: 800; padding: 10px 18px; }
+.forge-primary:hover { background: #b5ef50; }
 .bulk-remove { color: #ff928c; padding: 10px 16px; }
 .pill { border-radius: 99px; padding: 5px 10px; background: alpha(@window_fg_color,0.07); font-size: 11px; }
 .game-card { border-radius: 14px; background: @card_bg_color; border: 2px solid alpha(@window_fg_color,0.06); }
-.game-card.selected { border-color: #bdd897; box-shadow: 0 2px 12px alpha(#76b900,0.22); }
+.game-card.selected { border-color: #76b900; box-shadow: 0 2px 12px alpha(#76b900,0.22); }
 .poster-button { padding: 0; border: 0; border-radius: 11px 11px 0 0; }
 .poster { border-radius: 11px 11px 0 0; background: #242426; }
 .poster-fallback { color: #a5a5a8; padding: 22px; font-weight: 800; font-size: 19px; }
 .card-info { padding: 10px 12px 12px; }
 .card-title { font-weight: 800; font-size: 13px; }
 .card-meta { font-size: 10px; opacity: 0.7; }
-.cover-badge { background: alpha(#111a10,0.90); color: #dcefc1; padding: 5px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; }
+.cover-badge { background: alpha(#111a10,0.90); color: #b5ef50; padding: 5px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; }
 .cover-badge.unavailable { color: #ffb3ad; }
 .selection-bar { padding: 12px 20px; background: alpha(@window_fg_color,0.04); }
 .status-strip { padding: 8px 20px; font-size: 12px; }
@@ -202,9 +232,10 @@ class Window(Adw.ApplicationWindow):
         view=self.settings.get('library_view','posters');scale=self.settings.get('art_scale',100)/100
         width,height=(int(158*scale),int(237*scale)) if view=='posters' else (int(290*scale),int(136*scale)) if view=='capsules' else (54,81)
         card=Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL if view=='list' else Gtk.Orientation.VERTICAL);card.add_css_class('game-card');card.set_size_request(width+4,-1)
-        overlay=Gtk.Overlay();card.append(overlay)
-        pic=Gtk.Picture(content_fit=Gtk.ContentFit.COVER,can_shrink=True);pic.set_size_request(width,height);pic.add_css_class('poster')
-        click=Gtk.Button(child=pic);click.add_css_class('poster-button');click.connect('clicked',lambda *_:self.details(game));overlay.set_child(click)
+        overlay=Gtk.Overlay(valign=Gtk.Align.START);card.append(overlay)
+        pic=CoverPicture(content_fit=Gtk.ContentFit.CONTAIN,can_shrink=True);pic.add_css_class('poster')
+        frame=Gtk.AspectFrame(ratio=width/height,obey_child=False);frame.set_child(pic);frame.set_size_request(width,height)
+        click=Gtk.Button(child=frame);click.add_css_class('poster-button');click.connect('clicked',lambda *_:self.details(game));overlay.set_child(click)
         fallback=label(game['name'],'poster-fallback');fallback.set_halign(Gtk.Align.CENTER);fallback.set_valign(Gtk.Align.CENTER);fallback.set_max_width_chars(13);overlay.add_overlay(fallback)
         check=Gtk.CheckButton(halign=Gtk.Align.END,valign=Gtk.Align.START);margins(check,10);check.set_tooltip_text('Select '+game['name']);check.connect('toggled',lambda *_:self.selection_changed())
         if view=='list':card.prepend(check);fallback.set_visible(False)
@@ -216,12 +247,19 @@ class Window(Adw.ApplicationWindow):
         title=label(game['name'],'card-title');title.set_lines(2);title.set_ellipsize(Pango.EllipsizeMode.END);title.set_max_width_chars(70 if view=='list' else 24 if view=='capsules' else 18);text.append(title)
         meta=label(game.get('source',''),'card-meta');meta.set_lines(1);meta.set_ellipsize(Pango.EllipsizeMode.END);meta.set_max_width_chars(80 if view=='list' else 28 if view=='capsules' else 22);text.append(meta)
         self.flow.insert(card,-1);wrapper=card.get_parent()
-        entry={'widget':card,'wrapper':wrapper,'check':check,'picture':pic,'fallback':fallback,'meta':meta,'data':game,'size':(width,height)};self.cards[game['game']]=entry;self.paint_card(entry)
+        entry={'widget':card,'wrapper':wrapper,'check':check,'picture':pic,'fallback':fallback,'meta':meta,'data':game,'size':(width,height),'frame':frame};self.cards[game['game']]=entry;self.paint_card(entry)
     def paint_card(self,entry):
-        game=entry['data'];path=(game.get('capsule') or game.get('poster')) if self.settings.get('library_view')=='capsules' else game.get('poster')
+        game=entry['data'];path=game.get('capsule') if self.settings.get('library_view')=='capsules' else game.get('poster')
         if path:
-            try:entry['picture'].set_paintable(Gdk.Texture.new_for_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(path,*entry['size'],True)));entry['fallback'].set_visible(False)
+            try:
+                texture=Gdk.Texture.new_from_filename(path)
+                entry['frame'].set_ratio(texture.get_width()/texture.get_height())
+                entry['picture'].set_paintable(texture);entry['fallback'].set_visible(False)
+                if game.get('accent_class'):entry['widget'].remove_css_class(game['accent_class'])
+                game['accent_class']=artwork_accent(path);entry['widget'].add_css_class(game['accent_class'])
             except Exception:entry['fallback'].set_visible(True)
+        else:
+            entry['picture'].set_paintable(None);entry['fallback'].set_visible(True)
         entry['meta'].set_text(game.get('genres') or game.get('source',''))
         entry['widget'].set_tooltip_text(game['name']+'\n'+(game.get('art_credit') or 'Artwork pending'))
     def filter_games(self):
@@ -253,6 +291,7 @@ class Window(Adw.ApplicationWindow):
         self.start('Loading SteamGridDB posters and metadata',load,lambda _:None,'art')
     def details(self,game):
         d,b,f=self.open_panel(game['name'])
+        if game.get('accent_class'):d.add_css_class(game['accent_class'])
         b.append(label(game.get('description') or 'Game details from your library.'))
         group=Adw.PreferencesGroup(title='Game information');b.append(group)
         values=[('Installed profile',game.get('profile','Not installed')),('Compatibility',game.get('blocked') or 'Native DLSS-G detected; install checks still apply'),('Developer',game.get('developers')),('Genre',game.get('genres')),('Released',game.get('release')),('Library',game.get('library')),('Folder',game['game'])]
@@ -263,7 +302,7 @@ class Window(Adw.ApplicationWindow):
         if game.get('art_credit'):b.append(label(game['art_credit'],'dim-label'))
         if game.get('art_link'):b.append(Gtk.LinkButton(uri=game['art_link'],label='View artwork source'))
         if game.get('media_note'):b.append(label(game['media_note'],'dim-label'))
-        f.append(button('Close',lambda *_:d.close()))
+        close=button('Close',lambda *_:d.close());close.add_css_class('suggested-action');f.append(close)
     def launch_action(self,operation,entire=False):
         if self.busy and self.task_kind!='art':return
         rows=list(self.games) if entire else [e['data'] for e in self.cards.values() if e['check'].get_active()]
@@ -273,6 +312,7 @@ class Window(Adw.ApplicationWindow):
         orb=Gtk.Box(halign=Gtk.Align.CENTER);orb.add_css_class('progress-orb');orb.append(Gtk.Image.new_from_icon_name('applications-games-symbolic'));b.append(orb)
         self.job_label=label(f'Preparing {len(rows)} games','progress-title');b.append(self.job_label)
         b.append(label('Your games and saves stay installed. Only identified OptiScaler components are removed.' if operation=='uninstall' else f"Profile: {'NR + MFG' if self.mode=='nr-mfg' else 'MFG Only'}. Backups are created before file changes."))
+        if operation!='uninstall':b.append(label('Changing packages or deployment methods? Fully uninstall the previous setup first, then install the new one.','dim-label'))
         spin=Gtk.Spinner(spinning=True,halign=Gtk.Align.CENTER,width_request=34,height_request=34);b.append(spin)
         pulse=Gtk.ProgressBar();b.append(pulse)
         def animate():

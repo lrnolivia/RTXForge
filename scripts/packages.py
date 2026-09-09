@@ -2,6 +2,7 @@
 import pathlib,json,hashlib,urllib.request,urllib.parse,subprocess,shutil,zipfile,os
 import transactions as t
 import ui
+import pipeline
 from storage import storage
 P=pathlib.Path
 POLICY='RTXForge.NrPanel.v1'
@@ -87,7 +88,7 @@ def prepare(c,mode,readonly=False):
     if custom.exists():
         meta=t.read_json(custom);dll=custom.parent/'OptiScaler.dll';t.need(meta['policy']==POLICY and meta['upstream_commit']==c['commit'] and t.digest(dll)==meta['sha256'],'Custom loader identity mismatch');sources['OptiScaler.dll']=(dll,meta['sha256'])
     # Imported builds enforce NrPanel; stock builds keep the inactive panel.
-    return sources
+    return pipeline.compose(sources,mode,c)
 
 def import_loader(c,folder):
     root=storage(c,100*1024**2);meta=t.read_json(folder/'rtxforge-loader.json');dll=t.safe(folder/'OptiScaler.dll')

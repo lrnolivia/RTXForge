@@ -4,6 +4,8 @@
 
 ## Native GNOME desktop
 
+**0.3.1** separates the NR payload from the protected headless MFG pipeline, pins the patched NR model, filters Steam tools and apps, fixes full-resolution artwork sizing, restores vivid green accents, and samples each game’s artwork for its card and details accents. Changing package providers or deployment methods should use a full uninstall/reinstall. Proton NR reliability remains unverified.
+
 **0.3.0** adds a unified poster library, automatic keyless SteamGridDB covers, metadata, profile buttons, floating action panels, one-click whole-library install/uninstall and expanded settings. It uses solid colors and defaults to tall posters; capsules and list views are available. Hardware prerequisites are checked before installation.
 
 Extract and double-click **RUN RTXFORGE GUI**. See [desktop guide](docs/DESKTOP.md). The custom repository option is a future UI placeholder only.

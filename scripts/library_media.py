@@ -23,7 +23,7 @@ class Redirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 def request(url,limit=3*1024**2,payload=None,timeout=10):
-    allowed(url);headers={'User-Agent':'RTXForge/0.3.0 (Linux desktop)'}
+    allowed(url);headers={'User-Agent':'RTXForge/0.3.1 (Linux desktop)'}
     if payload is not None:headers['Content-Type']='application/json'
     with urllib.request.build_opener(Redirect).open(urllib.request.Request(url,headers=headers,data=json.dumps(payload).encode() if payload is not None else None),timeout=timeout) as response:
         data=response.read(limit+1)
@@ -44,7 +44,7 @@ class LibraryMedia:
         if record.exists():
             try:
                 saved=json.loads(record.read_text());result=saved['data']
-                if not refresh and saved.get('provider')=='sgdb-public-v1' and time.time()-saved['time']<int(self.settings.get('cache_days',7))*86400 and (self.settings.get('library_view')!='capsules' or result.get('capsule')) and (not result.get('poster') or Path(result['poster']).is_file()):return result
+                if not refresh and saved.get('provider')=='sgdb-public-v2' and time.time()-saved['time']<int(self.settings.get('cache_days',7))*86400 and (self.settings.get('library_view')!='capsules' or result.get('capsule')) and (not result.get('poster') or Path(result['poster']).is_file()):return result
             except (OSError,ValueError,KeyError):result={}
         appid=str(row.get('appid') or '')
         if not appid.isdigit():appid=''
@@ -82,17 +82,17 @@ class LibraryMedia:
                 result.update({'poster':str(path),'art_credit':credit,'art_link':link});break
             except Exception:errors.append('Artwork unavailable')
         if self.settings.get('library_view')=='capsules':
-            wide_url=result.get('capsule_url','')
+            wide_url=f'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg' if appid else ''
             try:
                 if result.get('sgdb_game_id'):
                     wide_payload={'asset_type':'grid','game_id':[result['sgdb_game_id']],'page':0,'limit':4,'dimensions':['920x430'],'static':True,'animated':False,'nsfw':False,'humor':False,'epilepsy':False,'untagged':True}
                     wide=json_request('https://www.steamgriddb.com/api/public/search/assets',wide_payload,timeout=timeout).get('data',{}).get('assets',[])
-                    wide=[g for g in wide if not any(g.get(k) for k in ('nsfw','humor','epilepsy','is_animated','is_deleted'))]
+                    wide=[g for g in wide if g.get('width')==920 and g.get('height')==430 and not any(g.get(k) for k in ('nsfw','humor','epilepsy','is_animated','is_deleted'))]
                     if wide:wide_url=wide[0]['url'];result['capsule_credit']='SteamGridDB · '+wide[0].get('author',{}).get('name','Community artwork')
                 if wide_url:
                     data=request(wide_url,limit=8*1024**2,timeout=timeout);path=self.root/(ident+'.wide');t.atomic_file(path,data,0o600);result['capsule']=str(path)
             except Exception:pass
         if errors:result['media_note']='; '.join(dict.fromkeys(errors))
         else:result.pop('media_note',None)
-        t.atomic_file(record,json.dumps({'time':time.time(),'provider':'sgdb-public-v1','data':result}).encode(),0o600)
+        t.atomic_file(record,json.dumps({'time':time.time(),'provider':'sgdb-public-v2','data':result}).encode(),0o600)
         return result

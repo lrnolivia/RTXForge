@@ -2,6 +2,7 @@
 import pathlib,json,re
 import transactions as t
 import profiles
+import pipeline
 from ownership import import_record
 P=pathlib.Path
 NR={'nvngx_dlssnr.dll','nvngx.dll_dlssnr.dll'}
@@ -93,7 +94,7 @@ def make(target,state,sources,operation='install',adopt=False):
         if rel.casefold() in wanted_keys:continue
         n=P(rel).name.lower();p=game/rel
         obsolete=P(rel).parent==directory and n in t.PROXIES|MARKERS|{'optiscaler.dll'}
-        if (mode=='mfg-only' and n in NR) or obsolete:
+        if (mode=='mfg-only' and n in pipeline.NR_NAMES) or obsolete:
             if p.exists():changes.append({'path':rel,'before':t.digest(p),'after':None})
         else:managed.append({'path':rel,'after':h})
     # Switching to MFG Only explicitly removes the two exact NR files beside the selected exe,
@@ -103,7 +104,7 @@ def make(target,state,sources,operation='install',adopt=False):
         for n in NR:
             actual=files.get((prefix+n).casefold())
             if actual and actual.casefold() not in changed:changes.append({'path':actual,'before':t.digest(game/actual),'after':None})
-    return finalize({'schema':1,'observed_utc':t.now(),'game':str(game),'exe':exe,'mode':mode,'operation':operation,'listing':files,'inputs':inputs,'changes':changes,'managed':managed,'conflicts':conflicts,'proxy':proxy,'nr_panel':'visible' if mode=='nr-mfg' else 'hidden with RTXForge loader'})
+    return finalize({'schema':1,'pipeline':pipeline.PIPELINE,'migration_advice':'Fully uninstall the previous package before changing providers or deployment methods.','observed_utc':t.now(),'game':str(game),'exe':exe,'mode':mode,'operation':operation,'listing':files,'inputs':inputs,'changes':changes,'managed':managed,'conflicts':conflicts,'proxy':proxy,'nr_panel':'visible' if mode=='nr-mfg' else 'hidden with RTXForge loader'})
 
 def remove(target,state):
     game=t.safe(target['game']);exe=target['exe'];t.relative(exe);owned,origin=owned_files(target,state,game,exe);t.need(owned,'No ownership record; no broad cleanup is performed')
