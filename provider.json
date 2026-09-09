@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "config_schema": "rtxforge-v3-headless-v1",
+  "repo": "y4my4my4m/OptiScaler_DLSSNR_Multipass_MFG",
+  "tag": "v10.0.0-dev-fork-y4my4my4m-v4",
+  "commit": "7b7220bbb4994a9c8ae60cfc75a44cb67995efb8",
+  "asset": "OptiScaler_v10.0.0-dev-fork-y4my4my4m-v4_20260905_with_DLSS.7z",
+  "url": "https://github.com/y4my4my4m/OptiScaler_DLSSNR_Multipass_MFG/releases/download/v10.0.0-dev-fork-y4my4my4m-v4/OptiScaler_v10.0.0-dev-fork-y4my4my4m-v4_20260905_with_DLSS.7z",
+  "sha256": "9d7824cc9cfb15265bc6438b4638aad74ff9cd6d1d3488ab73724affb386a8b0",
+  "expected_nr_size": 165840496,
+  "storage": {
+    "mount": "/var/mnt/Games",
+    "uuid": "c0d758ff-5f5f-4668-8520-5941c557f9e9",
+    "root": "/var/mnt/Games/Ada-Lab/RTXForge",
+    "reserve_bytes": 107374182400
+  },
+  "name": "RTXForge",
+  "headless": [
+    {
+      "path": "Dll version/dlss-enabler.asi",
+      "destination": "OptiScaler/dlss-enabler-headless.dll",
+      "size": 30712320,
+      "git_blob": "5779bc2d752d6e971015604f2a954f23ffed0fd6"
+    },
+    {
+      "path": "Dll version/nvngx.ini",
+      "destination": "OptiScaler/nvngx.ini",
+      "size": 14246,
+      "git_blob": "58925054494eb293d07892f457c262b4b6caaa87"
+    }
+  ],
+  "nr": {
+    "repo": "ShyVortex/dlss-unlocked",
+    "tag": "v0.3.0",
+    "asset": "dlss-unlocked-standalone-v0.3.0.zip",
+    "sha256": "adf6b2cdcb0b57f3d04fae095135615c9c9f8c6fc8b2bdeccf01cf62672c5183"
+  }
+}
