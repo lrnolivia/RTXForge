@@ -30,7 +30,7 @@
     },
     "strategy": "dlss-unlocked-proton-v1"
   },
-  "bundled_loader_sha256": "4cdb6803880309c00cad603abea0e8a872955fbd9ea3d49c3277a5c10c98e222",
+  "bundled_loader_sha256": "95580ebc7d2f562d6d99cd798587f757a51cd7bd52e24b0895c42414c3a3c2e8",
   "pipeline": "streamline-native-dlssg-nr-separate-v2",
   "mfg": {
     "default_input": "dlssg",
@@ -41,10 +41,10 @@
   },
   "runtime_fork": {
     "repo": "lrnolivia/RTXForge-MFG",
-    "commit": "90ce82aa86deb8cf76ecc666b05d596094de1163",
-    "build": "https://github.com/lrnolivia/RTXForge-MFG/actions/runs/34437658911",
+    "commit": "deca7b7a8f1953de3cf6fe2731ede440b3ddaadf",
+    "build": "https://github.com/lrnolivia/RTXForge-MFG/actions/runs/34455052784",
     "capabilities": [
-      "RTXForge.NativeMfgMenu.v1"
+      "RTXForge.NativeMfgMenu.v3e"
     ]
   }
 }
