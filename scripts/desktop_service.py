@@ -31,8 +31,14 @@ class DesktopService:
             config=Path(g.exe).parent/'OptiScaler.ini' if g.exe else root/'OptiScaler.ini'
             ini=discovery.get_ini_values_all(config)
             installed=config.is_file()
+            fg=ini.get('FrameGen',{}) if installed else {}
+            fg_input=fg.get('FGInput','').lower();replacement=fg.get('FGNvngxReplacement','').lower()
+            if fg_input=='dlssg' and replacement in ('','auto','none'):mfg_route='Native Streamline DLSS-G'
+            elif fg_input=='nvngxfg' and replacement=='arturs':mfg_route='Enabler compatibility'
+            elif installed:mfg_route='Custom / legacy FG route'
+            else:mfg_route='Not installed'
             row={'name':g.name,'game':str(root),'exe':exe,'source':g.type,'blocked':reason,'appid':g.appid,
-                 'library':str(library or root.parent),'installed':installed,
+                 'library':str(library or root.parent),'installed':installed,'mfg_route':mfg_route,
                  'profile':('NR + MFG' if ini.get('DlssNr',{}).get('Enabled','false').lower()=='true' else 'MFG Only') if installed else 'Not installed'}
             if g.manifest:
                 try:
@@ -74,7 +80,7 @@ class DesktopService:
                 else:blocked.append({'name':row['name'],'reason':'Already up to date — no changes needed'})
             except (t.Refusal,OSError,ValueError) as ex:blocked.append({'name':row['name'],'reason':friendly(str(ex))})
         return {'kind':'batch','title':{'install':'Install / update','repair':'Repair','uninstall':'Uninstall OptiScaler'}[operation],
-                'operation':operation,'plans':ready,'blocked':blocked,'rows':[{'name':Path(p['game']).name,'detail':f"{len(p['changes'])} file changes · {profiles.MODES[p['mode']]}"+(f" · Proton override: {Path(p['proxy']).stem}=n,b" if p.get('proxy') else '')} for p in ready]}
+                'operation':operation,'plans':ready,'blocked':blocked,'rows':[{'name':Path(p['game']).name,'detail':f"{len(p['changes'])} file changes · {profiles.MODES[p['mode']]} · {p.get('mfg_route_label','Native Streamline DLSS-G')}"+(' · adopting external OptiScaler' if p.get('adopted') else '')+(f" · Proton override: {Path(p['proxy']).stem}=n,b" if p.get('proxy') else '')} for p in ready]}
 
     def recoveries(self):
         root=storage(self.config);rows=[]

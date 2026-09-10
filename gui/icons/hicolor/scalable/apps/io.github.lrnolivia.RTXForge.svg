@@ -1,15 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-<defs>
- <linearGradient id="shell" x2=".8" y2="1"><stop stop-color="#343b40"/><stop offset="1" stop-color="#101416"/></linearGradient>
- <linearGradient id="core" x2=".6" y2="1"><stop stop-color="#c7ff53"/><stop offset=".5" stop-color="#91d51b"/><stop offset="1" stop-color="#65a300"/></linearGradient>
-</defs>
-<rect x="24" y="30" width="464" height="464" rx="110" fill="#080b0d"/>
-<rect x="24" y="18" width="464" height="464" rx="110" fill="url(#shell)" stroke="#424b50" stroke-width="3"/>
-<path d="M111 104h232l62 62v185l-61 61H169l-62-62V169z" fill="#080d10" stroke="#4b5847" stroke-width="3"/>
-<g fill="#59624c"><path d="M173 83h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zM173 411h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zM85 175h22v15H85zm0 51h22v15H85zm0 51h22v15H85zm0 51h22v15H85zM405 175h22v15h-22zm0 51h22v15h-22zm0 51h22v15h-22zm0 51h22v15h-22z"/></g>
-<path d="M162 151h180l-25 43H207v42h97l-25 43h-72v78h-45z" fill="url(#core)"/>
-<path d="m312 258 40 0-57 98h-51z" fill="url(#core)"/>
-<path d="m327 217 19-33 26 45-19 33z" fill="#d7ff82"/>
-<path d="M70 407h54" stroke="#91d51b" stroke-width="7" stroke-linecap="round"/>
-<circle cx="421" cy="91" r="8" fill="#b6f13e"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+ <rect x="4" y="5" width="56" height="56" rx="9" fill="#000" opacity=".2"/>
+ <rect x="4" y="4" width="56" height="56" rx="9" fill="#3f3f3f"/>
+ <path d="M37 12c-1 6-10 7-10 14 0 5 4 8 9 8 6 0 10-4 10-10-4 2-5-2-5-5-2 3-3 4-5 5 2-5 3-8 1-12zM13 36h38v6H40v6l7 4v3H21v-3l7-4v-6h-7z" fill="#000" opacity=".2"/>
+ <path d="M37 11c-1 6-10 7-10 14 0 5 4 8 9 8 6 0 10-4 10-10-4 2-5-2-5-5-2 3-3 4-5 5 2-5 3-8 1-12z" fill="#76b900"/>
+ <path d="M36 24c-1 2-4 3-4 5 0 2 2 3 4 3s4-2 4-4c-2 1-3-1-4-4z" fill="#3f3f3f"/>
+ <path d="M13 35h38v6H40v6l7 4v3H21v-3l7-4v-6h-7z" fill="#76b900"/>
+ <path d="M13 4a9 9 0 0 0-9 9v1a9 9 0 0 1 9-9h38a9 9 0 0 1 9 9v-1a9 9 0 0 0-9-9z" fill="#fff" opacity=".1"/>
 </svg>

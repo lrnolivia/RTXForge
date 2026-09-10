@@ -16,10 +16,10 @@ Design goals:
 - Move old OptiScaler/ReShade/DLSS5/MFG stack to timestamped backups.
 - Never overwrite native game DLSS or Streamline DLLs. v2.5.2 also restores game-native Streamline files previously replaced by v2.1-v2.5.1 when a safe historical backup exists.
 - For NR routes, reuse a compatible Ada-patched DLSS-NR runtime when available; otherwise download the verified Linux/Proton standalone source from ShyVortex/dlss-unlocked and extract only its patched nvngx_dlssnr.dll.
-- Offer three explicit routes: NR + MFG, NR only, and MFG only.
-- Stage NR routes at 70% model working scale with moderate OptiScaler RCAS sharpening, but leave NR OFF until the user enables it in the overlay.
+- Offer two explicit feature modes: NR + MFG and MFG Only. Both require native DLSS-G evidence.
+- Stage NR + MFG at 70% model working scale with moderate OptiScaler RCAS sharpening and enable NR for the next launch.
 - Keep OptiScaler.ini writable on Bazzite/Proton and verify direct file + directory write access.
-- Return MFG routing to the original working v1.0.0 pattern: native Streamline DLSS-G input -> private y4my DLSS-G output, with Ada MFG unlock; leave optional pacing workarounds on auto.
+- Default MFG routing is native Streamline DLSS-G input -> private y4my DLSS-G output, with Ada MFG unlock and Blackwell kernels. Enabler remains only as a compatibility fallback.
 - Record the exact WINEDLLOVERRIDES line for the actual proxy selected per game.
 - Keep manifest-driven rollback/uninstall semantics.
 """
@@ -56,14 +56,14 @@ HEADLESS_SOURCE_GIT_BLOB_SHA1 = '5779bc2d752d6e971015604f2a954f23ffed0fd6'
 HEADLESS_NVNGX_INI_PATH = 'Dll version/nvngx.ini'
 HEADLESS_NVNGX_INI_SIZE = 14246
 HEADLESS_NVNGX_INI_GIT_BLOB_SHA1 = '58925054494eb293d07892f457c262b4b6caaa87'
-HEADLESS_ROUTE_ID = 'arturs-headless-proton-stable-v3'
+HEADLESS_ROUTE_ID = 'native-streamline-dlssg-ada-v4'  # legacy constant name; value is the active native route
 NR_PROFILE_ID = 'nr70-v1'
 NR_STOCK_3108_SHA256 = 'e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e'
 NR_MIN_SIZE = 100000000
 NR_MAX_SIZE = 250000000
 NR_CACHE_NAME = 'nvngx_dlssnr.dll'
 NR_META_NAME = 'nvngx_dlssnr.source.json'
-PREPARATION_POLICY = 'stable-v3-y4my-v4-arturs-headless-private-sl214-proton-flags'
+PREPARATION_POLICY = 'stable-v4-y4my-v4-native-streamline-dlssg-ada-private-sl214'
 STREAMLINE_TAG = 'bundled-2.14'
 STREAMLINE_LABEL = 'y4my v4 private bundled Streamline 2.14 (game-native Streamline untouched)'
 PROXY_PREFERENCE = ['dxgi.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'd3d12.dll', 'wininet.dll', 'winhttp.dll']
@@ -414,7 +414,7 @@ def inspect_game(game: Game) -> Game:
         game.exe = str(exe)
         game.target_dir = str(exe.parent)
     game.has_mfg = any((p.name.lower() in {'nvngx_dlssg.dll', 'sl.dlss_g.dll'} for p in up))
-    game.mode = 'DLSS NR + native-game DLSS-G + Ada MFG unlock' if game.has_mfg else 'DLSS NR only'
+    game.mode = 'Native DLSS-G detected · Ada MFG capable' if game.has_mfg else 'No native DLSS-G detected'
     return game
 
 def is_library_tool(name, appid=None):

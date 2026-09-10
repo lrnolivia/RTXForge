@@ -1,4 +1,4 @@
-# RTXForge 0.3.0 — GNOME library
+# RTXForge 0.4.2 — GNOME library
 
 Extract the ZIP and double-click **RUN RTXFORGE GUI**. The CLI is still available.
 
@@ -12,7 +12,7 @@ Extract the ZIP and double-click **RUN RTXFORGE GUI**. The CLI is still availabl
 - Hardware detection checks x86-64 Linux, an accessible NVIDIA driver, a GeForce RTX 40/50-series GPU and 7-Zip. Install/repair is unavailable if those prerequisites cannot be verified; uninstall remains available. Hardware success is not runtime proof for any particular game.
 - The custom repository controls in Settings are disabled UI placeholders only. No custom-repository interpretation or switching is implemented.
 
-GTK 4.10+, libadwaita 1.5+ and PyGObject are required. This is the GNOME build; KDE-native, Flatpak distribution and WinUI 3 remain later stages. State/cache/backups continue using the configured Games-drive storage in provider.json.
+GTK 4.10+, libadwaita 1.5+ and PyGObject are required. This is the GNOME build; KDE-native integration remains a later stage; the application ships as an AppImage. State/cache/backups continue using the configured Games-drive storage in provider.json.
 
 SteamGridDB artwork uses its website's anonymous public search endpoints, verified live without authentication. Those website interfaces can change; failures fall back to Steam or a placeholder and never block installation. Network requests are bounded; metadata never drives installation or executable selection. Covers are fetched at runtime, not redistributed in this ZIP.
 
@@ -21,3 +21,8 @@ The verified custom loader still hides the NR panel in MFG Only. NR + MFG starts
 Verification was limited to syntax, GUI rendering/navigation and existing desktop fixture checks. Six actual title posters were retrieved from SteamGridDB with no credentials. No installed games were modified. Extended testing was deliberately deferred at the user's request.
 
 The graphics-runtime-manager handoff is archived under docs/deferred and explicitly **not active work**.
+
+
+## Current MFG route
+
+New generic installs default to native Streamline DLSS-G with the y4my Ada MFG unlock (`FGInput=dlssg`, `FGOutput=dlssg`, `FGNvngxReplacement=none`). Enabler is not included. Review panels now report the selected MFG route; installed-game details report the detected route from `OptiScaler.ini`.

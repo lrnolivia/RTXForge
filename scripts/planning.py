@@ -3,6 +3,7 @@ import pathlib,json,re
 import transactions as t
 import profiles
 import pipeline
+import compatibility
 from ownership import import_record
 P=pathlib.Path
 NR={'nvngx_dlssnr.dll','nvngx.dll_dlssnr.dll'}
@@ -54,12 +55,16 @@ def make(target,state,sources,operation='install',adopt=False):
     if mode=='mfg-only':
         wanted={r:row for r,row in wanted.items() if P(r).name.lower() not in NR}
     else:t.need(prefix+'nvngx_dlssnr.dll' in wanted and prefix+'nvngx.dll_dlssnr.dll' in wanted,'NR + MFG needs both NR components')
+    adopted=False
     if adopt:
         recognized=[r for r in proxies if (game/r).stat().st_size<100*1024**2 and b'optiscaler' in (game/r).read_bytes().lower()]
-        t.need(len(recognized)==1 and ini.is_file(),'Adoption requires a recognizable OptiScaler proxy and INI')
-        for rel in list(wanted)+recognized+[prefix+n for n in MARKERS]:
-            actual=files.get(rel.casefold())
-            if actual:owned[actual]=t.digest(game/actual)
+        # Adoption is only for an external install that exists right now. A historical
+        # RTXForge record or a clean post-uninstall game must fall through to Fresh Install.
+        if len(recognized)==1 and ini.is_file():
+            adopted=True
+            for rel in list(wanted)+recognized+[prefix+n for n in MARKERS]:
+                actual=files.get(rel.casefold())
+                if actual:owned[actual]=t.digest(game/actual)
     conflicts=[];inputs={str(game/exe):t.digest(game/exe)}
     if origin:inputs[str(origin)]=t.digest(origin)
     for r in native:inputs[str(game/r)]=t.digest(game/r)
@@ -74,10 +79,11 @@ def make(target,state,sources,operation='install',adopt=False):
         provider=n in t.PROXIES|{'nvngx.dll','nvapi64.dll','optiscaler.dll'} or n.endswith(('.asi','.addon32','.addon64')) or (n.endswith('.dll') and 'renodx' in n)
         if provider and (rel not in owned or n not in t.PROXIES|{'optiscaler.dll'}):conflicts.append('Competing/unowned graphics file: '+rel)
     template=P(sources['OptiScaler.ini'][0]).read_text(encoding='utf-8-sig');old=ini.read_text(encoding='utf-8-sig') if ini.is_file() else None
-    text=profiles.render(template,old,mode);wanted[prefix+'OptiScaler.ini']={'text':text,'hash':t.sha(text.encode())}
+    mfg=compatibility.route_for(target)
+    text=profiles.render(template,old,mode,mfg['key']);wanted[prefix+'OptiScaler.ini']={'text':text,'hash':t.sha(text.encode())}
     # Preserve the user's Artur configuration after initial seeding.
     artur=files.get((prefix+'OptiScaler/nvngx.ini').casefold())
-    if artur:
+    if artur and prefix+'OptiScaler/nvngx.ini' in wanted:
         p=game/artur;wanted[prefix+'OptiScaler/nvngx.ini']={'source':str(p),'hash':t.digest(p)}
     changes=[];managed=[]
     for rel,item in wanted.items():
@@ -94,7 +100,7 @@ def make(target,state,sources,operation='install',adopt=False):
         if rel.casefold() in wanted_keys:continue
         n=P(rel).name.lower();p=game/rel
         obsolete=P(rel).parent==directory and n in t.PROXIES|MARKERS|{'optiscaler.dll'}
-        if (mode=='mfg-only' and n in pipeline.NR_NAMES) or obsolete:
+        if (mode=='mfg-only' and n in pipeline.NR_NAMES) or (n in pipeline.LEGACY_NAMES and (directory/'OptiScaler') in P(rel).parents) or obsolete:
             if p.exists():changes.append({'path':rel,'before':t.digest(p),'after':None})
         else:managed.append({'path':rel,'after':h})
     # Switching to MFG Only explicitly removes the two exact NR files beside the selected exe,
@@ -104,7 +110,7 @@ def make(target,state,sources,operation='install',adopt=False):
         for n in NR:
             actual=files.get((prefix+n).casefold())
             if actual and actual.casefold() not in changed:changes.append({'path':actual,'before':t.digest(game/actual),'after':None})
-    return finalize({'schema':1,'pipeline':pipeline.PIPELINE,'migration_advice':'Fully uninstall the previous package before changing providers or deployment methods.','observed_utc':t.now(),'game':str(game),'exe':exe,'mode':mode,'operation':operation,'listing':files,'inputs':inputs,'changes':changes,'managed':managed,'conflicts':conflicts,'proxy':proxy,'nr_panel':'visible' if mode=='nr-mfg' else 'hidden with RTXForge loader'})
+    return finalize({'schema':1,'pipeline':pipeline.PIPELINE,'migration_advice':'Fully uninstall the previous package before changing providers or deployment methods.','observed_utc':t.now(),'game':str(game),'exe':exe,'mode':mode,'operation':operation,'listing':files,'inputs':inputs,'changes':changes,'managed':managed,'conflicts':conflicts,'proxy':proxy,'adopted':adopted,'mfg_route':mfg['key'],'mfg_route_label':mfg['label'],'mfg_route_reason':mfg['reason'],'mfg_profiled':mfg['profiled'],'nr_panel':'visible' if mode=='nr-mfg' else 'hidden with RTXForge loader'})
 
 def remove(target,state):
     game=t.safe(target['game']);exe=target['exe'];t.relative(exe);owned,origin=owned_files(target,state,game,exe);t.need(owned,'No ownership record; no broad cleanup is performed')

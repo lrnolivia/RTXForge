@@ -3,7 +3,7 @@ import pathlib,sys,json,struct,uuid,contextlib,io
 from unittest.mock import patch
 P=pathlib.Path
 sys.path.insert(0,str(P(__file__).resolve().parents[1]/'scripts'))
-import rtxforge as app,transactions as t,planning,profiles
+import rtxforge as app,transactions as t,planning,profiles,compatibility
 from storage import storage
 c=app.load_provider();root=storage(c,512*1024**2)/'verification'/uuid.uuid4().hex;root.mkdir(parents=True);c['storage']['root']=str(root/'state');state=storage(c);state.mkdir()
 fixture=root/'payload';fixture.mkdir();template='[DlssNr]\nEnabled=false\nPreUpscale=true\nDualFeature=false\n[FrameGen]\nEnabled=false\n[DLSSG]\nAdaMfgUnlock=false\n'
@@ -16,15 +16,20 @@ for i,mode in enumerate(['nr-mfg','mfg-only']):
  for n,data in {'nvngx_dlssg.dll':b'native FG','sl.interposer.dll':b'native SL','save.dat':b'save control'}.items():(game/n).write_bytes(data)
  targets.append({'game':str(game),'exe':'Game.exe','mode':mode})
 checks=[];log=io.StringIO()
+# Route policy regression: generic/Cyberpunk use native Streamline.
+assert compatibility.route_for({'name':'Generic Game','game':'/games/Generic','exe':'Game.exe'})['key']=='native-streamline'
+assert compatibility.route_for({'name':'Cyberpunk 2077','game':'/games/Cyberpunk 2077','exe':'bin/x64/Cyberpunk2077.exe'})['key']=='native-streamline'
+checks.append('compatibility policy: native Streamline default/Cyberpunk')
+
 with contextlib.redirect_stdout(log),contextlib.redirect_stderr(log):
  plans=[planning.make(r,state,sources) for r in targets];batch=app.apply_batch(c,plans)
  for r in targets:
   g=P(r['game']);ini=t.ini((g/'OptiScaler.ini').read_text());nr=r['mode']=='nr-mfg'
   assert ini['DlssNr']['Enabled']==str(nr).lower() and ini['RTXForge']['NrPanel']==('1' if nr else '0')
   assert (g/'nvngx_dlssnr.dll').exists()==nr and (g/'nvngx.dll_dlssnr.dll').exists()==nr
-  assert ini['FrameGen']['FGNvngxReplacement']=='arturs' and ini['FrameGen']['Enabled']=='true'
+  assert ini['FrameGen']['FGInput']=='dlssg' and ini['FrameGen']['FGOutput']=='dlssg' and ini['FrameGen']['FGNvngxReplacement']=='none' and ini['FrameGen']['Enabled']=='true'
   if nr:assert ini['DlssNr']['WorkingScale']=='0.70' and ini['DlssNr']['PreUpscale']=='false' and ini['DlssNr']['DualFeature']=='true'
- checks.append('mixed-route batch: NR starts on; MFG Only excludes both NR files; headless route active')
+ checks.append('mixed-route batch: NR starts on; MFG Only excludes both NR files; native Streamline DLSS-G route active')
  # Switch an existing NR route to MFG Only and restore the batch.
  target={**targets[0],'mode':'mfg-only'};p=planning.make(target,state,sources);switch=app.apply_batch(c,[p]);g=P(target['game']);assert not (g/'nvngx_dlssnr.dll').exists()
  args=app.parser().parse_args(['rollback','--batch',str(switch),'--apply','--confirm','ROLLBACK']);app.rollback(args,c);assert (g/'nvngx_dlssnr.dll').exists();checks.append('route-switch removal and batch rollback restore NR bytes')

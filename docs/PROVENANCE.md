@@ -9,6 +9,6 @@ Read-only library discovery and the desktop launcher derive from that supplied r
 Upstream binaries retain their own licenses and notices:
 
 - [y4my OptiScaler fork](https://github.com/y4my4my4m/OptiScaler_DLSSNR_Multipass_MFG), pinned to commit `7b7220bbb4994a9c8ae60cfc75a44cb67995efb8` and release `v10.0.0-dev-fork-y4my4my4m-v4`.
-- [dlss-unlocked](https://github.com/ShyVortex/dlss-unlocked/releases/tag/v0.3.0), version 0.3.0, supplies the headless Artur module, configuration and NR payload.
+- [dlss-unlocked](https://github.com/ShyVortex/dlss-unlocked/releases/tag/v0.3.0), version 0.3.0, supplies the separately pinned NR forwarder, patched root model, private NR runtime and NR Streamline plugin. Enabler components are excluded.
 
-`provider.json` contains the exact archive hashes and headless Git blob identities. DLL payloads are downloaded from upstream rather than included in the RTXForge source archive. This project is not an NVIDIA product or endorsement.
+`provider.json` contains the exact archive hashes, y4my core identity, native Streamline/DLSS-G route policy and NR member SHA256 identities. DLL payloads are downloaded from upstream rather than included in the RTXForge source archive. This project is not an NVIDIA product or endorsement.

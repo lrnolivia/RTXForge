@@ -10,7 +10,7 @@ ROOT=P(__file__).resolve().parent.parent
 
 def load_provider(path=None):
     c=t.read_json(path or ROOT/'provider.json')
-    t.need(c.get('schema')==1 and c.get('config_schema')=='rtxforge-v3-headless-v1','Unsupported package/configuration schema')
+    t.need(c.get('schema')==1 and c.get('config_schema')=='rtxforge-v4-streamline-native-v1','Unsupported package/configuration schema')
     t.need(c['url'].startswith('https://github.com/'+c['repo']+'/releases/download/'),'Provider URL mismatch')
     return c
 
@@ -24,7 +24,7 @@ def normalize_targets(rows):
     return result
 
 def choose_mode():
-    ui.title('Choose your stack');ui.line('1 · NR + MFG','Neural Rendering enabled at install + headless MFG');ui.line('2 · MFG Only','Headless MFG · no NR DLLs · panel hidden with RTXForge loader')
+    ui.title('Choose your stack');ui.line('1 · NR + MFG','Neural Rendering + native Streamline DLSS-G / Ada MFG');ui.line('2 · MFG Only','Native Streamline DLSS-G / Ada MFG · no NR DLLs')
     choice=ui.prompt('Route [1/2]:');t.need(choice in ('1','2'),'No route selected');return 'nr-mfg' if choice=='1' else 'mfg-only'
 
 def select_targets(args,mode):
@@ -47,6 +47,7 @@ def preview(plans,details=False):
     for i,p in enumerate(plans,1):
         add=sum(r['before'] is None for r in p['changes']);remove=sum(r['after'] is None for r in p['changes']);replace=len(p['changes'])-add-remove
         ui.line(str(i)+' · '+profiles.MODES[p['mode']],p['game']);ui.line('Executable',p['exe']);ui.line('Changes',f'{add} add · {replace} replace · {remove} back up/remove')
+        ui.line('MFG route',p.get('mfg_route_label','Native Streamline DLSS-G')+(' · compatibility profile' if p.get('mfg_profiled') else ''))
         if p.get('proxy'):ui.line('Proton override',P(p['proxy']).stem+'=n,b — merge manually; launch options untouched')
         if p['mode']=='nr-mfg':ui.line('NR at startup','Enabled · WorkingScale 0.70 · v3 profile')
         else:ui.line('NR components','Absent; panel hidden with RTXForge loader (stock loader keeps inactive panel)')
@@ -158,7 +159,7 @@ def run(args):
         plans=ready
         ui.line('Apply summary',str(len(ready))+' ready games · '+str(len(blocked))+' excluded; only ready games will change')
     if args.dry_run:return
-    token='ADOPT' if args.adopt_existing else 'APPLY'
+    token='ADOPT' if args.adopt_existing and any(p.get('adopted') for p in plans) else 'APPLY'
     if confirm(args,token):ui.line('Batch record',apply_batch(c,plans))
 
 def main(argv=None):

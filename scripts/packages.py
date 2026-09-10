@@ -51,42 +51,99 @@ def verify(folder,record):
     t.need(set(t.files(folder))=={n.casefold() for n in record['files']},'Payload listing drift')
     for n,h in record['files'].items():t.need(t.digest(folder/n)==h,'Payload hash drift: '+n)
 
+def _discard_prepared_payload(pkg,record):
+    """Remove only reconstructible extraction state; never touch the verified source archive."""
+    if pkg.is_symlink():pkg.unlink()
+    elif pkg.exists():
+        t.safe(pkg)
+        shutil.rmtree(pkg)
+    if record.is_symlink():record.unlink()
+    elif record.exists():
+        t.safe(record)
+        record.unlink()
+
+def _extract_base_payload(c,cache,pkg,record):
+    cache.mkdir(parents=True,exist_ok=True)
+    archive=download(c['url'],cache/c['asset'],expected=c['sha256'])
+    t.need(not pkg.exists(),'Prepared payload path still exists after cache reset: '+str(pkg))
+    pkg.mkdir()
+    for n in entries(archive):
+        if n in ('OptiScaler.dll','OptiScaler.ini','nvngx.dll_dlssnr.dll') or n.startswith(('OptiScaler/','Licenses/')):extract(archive,n,pkg/n)
+    t.need((pkg/'OptiScaler.dll').exists() and (pkg/'OptiScaler/streamline/sl.interposer.dll').exists(),'Unexpected v3 payload layout')
+    manifest={'archive_sha256':c['sha256'],'files':{n:t.digest(pkg/n) for n in t.files(pkg).values()}}
+    t.save_new(record,manifest)
+    verify(pkg,manifest)
+    return manifest
+
+def _load_base_payload(c,cache,pkg,record,readonly=False):
+    """Reuse a verified extraction, or rebuild stale/partial derived cache from the pinned archive."""
+    manifest=None
+    if record.is_symlink():
+        if readonly:
+            raise t.Refusal('Prepared payload manifest is a link; run Prepare/Install once to rebuild it')
+        ui.line('Repairing cache','Unsafe prepared-payload manifest link detected; rebuilding from pinned source')
+        _discard_prepared_payload(pkg,record)
+    elif record.exists():
+        try:
+            manifest=t.read_json(record)
+            t.need(isinstance(manifest,dict) and isinstance(manifest.get('files'),dict),'Payload manifest malformed')
+            t.need(manifest.get('archive_sha256')==c['sha256'],'Payload manifest source drift')
+            verify(pkg,manifest)
+        except (t.Refusal,OSError,json.JSONDecodeError,KeyError,TypeError,ValueError) as exc:
+            if readonly:
+                raise t.Refusal('Prepared payload cache is invalid; run Prepare/Install once to rebuild it: '+str(exc)) from exc
+            ui.line('Repairing cache','Prepared payload drift detected; rebuilding from pinned source')
+            _discard_prepared_payload(pkg,record)
+            manifest=None
+    elif pkg.exists() or pkg.is_symlink():
+        if readonly:
+            raise t.Refusal('Prepared payload cache is incomplete; run Prepare/Install once to rebuild it')
+        ui.line('Repairing cache','Incomplete prepared payload detected; rebuilding from pinned source')
+        _discard_prepared_payload(pkg,record)
+    if manifest is None:
+        manifest=_extract_base_payload(c,cache,pkg,record)
+    return manifest
+
 def prepare(c,mode,readonly=False):
     root=storage(c,3*1024**3);cache=root/'packages'/c['sha256'];pkg=cache/'payload';record=cache/'files.json'
     if readonly:
         required=[record,*[root/'headless'/P(r['destination']).name for r in c['headless']]]
-        if mode=='nr-mfg':required += [root/'nr/runtime.json',root/'nr/nvngx_dlssnr.dll']
+        if mode=='nr-mfg':required += [root/'nr'/c['nr']['sha256']/name for name in c['nr']['components']]
         t.need(all(p.is_file() for p in required),'Payload not prepared; run Prepare first. Dry-run never downloads or writes cache.')
-    if record.exists():manifest=t.read_json(record);verify(pkg,manifest)
-    else:
-        cache.mkdir(parents=True,exist_ok=True)
-        archive=download(c['url'],cache/c['asset'],expected=c['sha256'])
-        t.need(not pkg.exists(),'Partial extraction retained; inspect '+str(pkg));pkg.mkdir()
-        for n in entries(archive):
-            if n in ('OptiScaler.dll','OptiScaler.ini','nvngx.dll_dlssnr.dll') or n.startswith(('OptiScaler/','Licenses/')):extract(archive,n,pkg/n)
-        t.need((pkg/'OptiScaler.dll').exists() and (pkg/'OptiScaler/streamline/sl.interposer.dll').exists(),'Unexpected v3 payload layout')
-        manifest={'archive_sha256':c['sha256'],'files':{n:t.digest(pkg/n) for n in t.files(pkg).values()}};t.save_new(record,manifest)
+    manifest=_load_base_payload(c,cache,pkg,record,readonly)
     sources={n:(pkg/n,h) for n,h in manifest['files'].items()}
     for row in c['headless']:
         dest=root/'headless'/P(row['destination']).name
         url='https://raw.githubusercontent.com/ShyVortex/dlss-unlocked/v0.3.0/'+urllib.parse.quote(row['path'])
         download(url,dest,blob=row['git_blob'],size=row['size']);sources[row['destination']]=(dest,t.digest(dest))
     if mode=='nr-mfg':
-        n=c['nr'];folder=root/'nr';nr=folder/'nvngx_dlssnr.dll';proof=folder/'runtime.json'
-        if proof.exists():t.need(t.digest(nr)==t.read_json(proof)['sha256'],'NR runtime drift')
-        else:
-            url='https://github.com/'+n['repo']+'/releases/download/'+n['tag']+'/'+n['asset'];a=download(url,folder/n['asset'],expected=n['sha256']);members=[m for m in entries(a) if P(m).name.lower()=='nvngx_dlssnr.dll'];t.need('nvngx_dlssnr.dll' in members,'Expected root NR runtime absent');extract(a,'nvngx_dlssnr.dll',nr)
-            t.need(100000000<nr.stat().st_size<250000000,'Unexpected NR runtime size');t.save_new(proof,{'sha256':t.digest(nr),'source_archive':n['sha256']})
-        sources['nvngx_dlssnr.dll']=(nr,t.digest(nr))
+        n=c['nr'];folder=root/'nr';layer=folder/n['sha256']
+        archive=None
+        for name,expected in n['components'].items():
+            t.relative(name);dest=layer/name
+            valid=dest.is_file() and not dest.is_symlink() and t.digest(dest)==expected
+            if not valid:
+                t.need(not readonly,'NR component missing or changed; prepare the NR layer first: '+name)
+                if archive is None:
+                    url='https://github.com/'+n['repo']+'/releases/download/'+n['tag']+'/'+n['asset']
+                    archive=download(url,folder/n['asset'],expected=n['sha256'])
+                    t.need(set(n['components']).issubset(entries(archive)),'Incomplete NR source archive')
+                if dest.exists() or dest.is_symlink():dest.unlink()
+                extract(archive,name,dest);t.need(t.digest(dest)==expected,'NR component hash mismatch: '+name)
+            sources[name]=(dest,expected)
     else:
         sources.pop('nvngx.dll_dlssnr.dll',None)
     custom=root/'loader/rtxforge-loader.json'
     bundled=P(__file__).resolve().parents[1]/'bundled-loader/rtxforge-loader.json'
-    if not custom.exists() and bundled.exists():
+    # The release-pinned build takes precedence over an older imported loader.
+    if bundled.exists():
         custom=bundled
         t.need(t.read_json(custom)['sha256']==c.get('bundled_loader_sha256'),'Bundled loader is not the pinned RTXForge build')
     if custom.exists():
-        meta=t.read_json(custom);dll=custom.parent/'OptiScaler.dll';t.need(meta['policy']==POLICY and meta['upstream_commit']==c['commit'] and t.digest(dll)==meta['sha256'],'Custom loader identity mismatch');sources['OptiScaler.dll']=(dll,meta['sha256'])
+        meta=t.read_json(custom);dll=custom.parent/'OptiScaler.dll';t.need(meta['policy']==POLICY and meta['upstream_commit']==c['commit'] and t.digest(dll)==meta['sha256'],'Custom loader identity mismatch');
+        t.need(meta['sha256']==c['bundled_loader_sha256'],'Loader is not the release-pinned build');
+        if c.get('runtime_fork'):t.need(meta.get('fork_commit')==c['runtime_fork']['commit'] and set(c['runtime_fork']['capabilities']).issubset(meta.get('capabilities',[])),'Loader capability metadata mismatch')
+        sources['OptiScaler.dll']=(dll,meta['sha256'])
     # Imported builds enforce NrPanel; stock builds keep the inactive panel.
     return pipeline.compose(sources,mode,c)
 

@@ -130,7 +130,7 @@ class Window(Adw.ApplicationWindow):
         self.mfg=Gtk.ToggleButton(label='MFG Only');self.nr=Gtk.ToggleButton(label='NR + MFG');self.nr.set_group(self.mfg)
         for toggle,mode in ((self.mfg,'mfg-only'),(self.nr,'nr-mfg')):
             toggle.add_css_class('profile-toggle');toggle.connect('toggled',self.profile_changed,mode);linked.append(toggle)
-        (self.nr if self.settings.get('default_profile')=='nr-mfg' else self.mfg).set_active(True);self.profile_note=label('Headless MFG · no NR panel','dim-label');controls.append(self.profile_note)
+        (self.nr if self.settings.get('default_profile')=='nr-mfg' else self.mfg).set_active(True);self.profile_note=label('Native Streamline MFG · no NR panel','dim-label');controls.append(self.profile_note)
         viewbar=Gtk.Box(spacing=10);library_title=label('Your games','heading');library_title.set_hexpand(True);viewbar.append(library_title)
         viewbox=Gtk.Box();viewbox.add_css_class('linked');viewbar.append(viewbox);self.view_buttons={};first=None
         for title,key in [('Posters','posters'),('Wide capsules','capsules'),('List','list')]:
@@ -181,7 +181,7 @@ class Window(Adw.ApplicationWindow):
     def profile_changed(self,toggle,mode):
         if toggle.get_active():
             self.mode=mode
-            if hasattr(self,'profile_note'):self.profile_note.set_text('NR starts enabled · NR panel visible' if mode=='nr-mfg' else 'Headless MFG · no NR panel')
+            if hasattr(self,'profile_note'):self.profile_note.set_text('NR starts enabled · Native Streamline MFG default' if mode=='nr-mfg' else 'Native Streamline MFG · no NR panel')
     def filter_changed(self,toggle,key):
         if toggle.get_active():self.filter=key;self.filter_games()
     def close_request(self,*_):
@@ -357,7 +357,7 @@ class Window(Adw.ApplicationWindow):
         if game.get('description'):b.append(label(game['description']))
         info=Adw.PreferencesGroup();b.append(info)
         technical=Adw.ExpanderRow(title='Installation details',subtitle='Location, compatibility and storage');info.add(technical)
-        values=[('Compatibility',game.get('blocked') or 'Native DLSS-G detected; runtime not verified'),('Library',game.get('library')),('Folder',game['game'])]
+        values=[('Compatibility',game.get('blocked') or 'Native DLSS-G detected; runtime not verified'),('MFG route',game.get('mfg_route')),('Library',game.get('library')),('Folder',game['game'])]
         if game.get('size_bytes'):values.append(('Installed size',f"{game['size_bytes']/1024**3:.1f} GiB"))
         for name,value in values:
             if value:technical.add_row(row(name,value))
@@ -419,7 +419,7 @@ class Window(Adw.ApplicationWindow):
     def show_settings(self,*_):
         d,b,f=self.open_panel('Settings')
         if os.environ.get('APPIMAGE'):
-            b.append(label('Desktop app · 0.4.1','heading'))
+            b.append(label('Desktop app · 0.4.2','heading'))
             b.append(button('Install / update this build',self.install_desktop,'forge-primary'))
             b.append(label('Keep this build in your app menu. Repeating this with a new AppImage updates it; your games and backups stay separate.','dim-label'))
         appearance=Adw.PreferencesGroup(title='Library appearance');b.append(appearance)

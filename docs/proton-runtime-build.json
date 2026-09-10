@@ -1,0 +1,12 @@
+{
+  "capabilities": [
+    "RTXForge.NativeMfgMenu.v1"
+  ],
+  "sha256": "4cdb6803880309c00cad603abea0e8a872955fbd9ea3d49c3277a5c10c98e222",
+  "schema": 1,
+  "upstream_commit": "7b7220bbb4994a9c8ae60cfc75a44cb67995efb8",
+  "policy": "RTXForge.NrPanel.v1",
+  "fork_commit": "90ce82aa86deb8cf76ecc666b05d596094de1163",
+  "run": "https://github.com/lrnolivia/RTXForge-MFG/actions/runs/34437658911",
+  "runtime_verified": false
+}

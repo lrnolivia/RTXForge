@@ -1,4 +1,4 @@
-# RTXForge 0.4.0 — Bazzite desktop app
+# RTXForge 0.4.2 — Bazzite desktop app
 
 This build targets Bazzite 44 GNOME x86_64 and uses its installed Python, GTK4/libadwaita, NVIDIA tools and 7-Zip. It is not a universal Linux binary. The AppImage format follows the official type-2 runtime design: https://docs.appimage.org/reference/architecture.html
 
@@ -8,6 +8,6 @@ The app is copied to `$XDG_DATA_HOME/rtxforge/application/RTXForge.AppImage` (no
 
 Application updates do not deploy graphics files into games. Game installs, repairs and uninstall actions remain explicit. Engine payloads, artwork, settings and transaction backups stay at the existing configured storage location on Games. The current provider configuration remains specific to this machine's pinned Games drive.
 
-This build adds main-library view buttons, padded icon controls, responsive artwork sizing, and artwork-led details panels with direct per-game actions. It retains the 0.3.1 MFG/NR engine. Full DLSS-Unlocked NR migration is still pending.
+This build adds main-library view buttons, padded icon controls, responsive artwork sizing, and artwork-led details panels with direct per-game actions. The 0.4.2 engine defaults to native Streamline DLSS-G input/output with the y4my Ada MFG unlock. Enabler is not included. Proton NR investigation remains separate.
 
 Build: `python3 packaging/build_appimage.py`. The upstream AppImage runtime is pinned by release URL and SHA256 in `packaging/runtime.json`.

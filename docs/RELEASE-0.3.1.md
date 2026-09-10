@@ -1,5 +1,7 @@
 # RTXForge 0.3.1
 
+> Historical release notes. RTXForge 0.4.2 supersedes the MFG route described below with native Streamline DLSS-G as the default and Enabler as a compatibility fallback.
+
 Extract and run **RUN RTXFORGE GUI**.
 
 - Full-resolution tall posters and wide capsules retain their proportions. Wide view never substitutes a tall poster. Artwork cache refreshes once for the corrected sources.

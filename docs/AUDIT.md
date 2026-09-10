@@ -13,13 +13,13 @@ Audited the supplied v3 Python source, launcher, package manifests, and pinned u
 | Native-provider restore from historical mappings | Not imported; native files remain protected. |
 | Size-only NR selection and duplicate archive members | Authenticate pinned archive and select the exact root NR member. |
 | NR panel called unconditionally | Deferred at user request. Stock inactive panel remains in MFG Only; optional source patch retained. |
-| Changing downloaded releases | Versioned provider manifest pins release, hashes and headless Git blob identities. Upgrades are explicit. |
+| Changing downloaded releases | Versioned provider manifest pins release, hashes, Streamline/DLSS-G payload identity and fallback headless Git blob identities. Upgrades are explicit. |
 
-The v3 profile is preserved: headless Artur route; Ada MFG unlock and kernels; automatic interpolation/reflex markers; forced DMFG disabled; flip metering/reflex sync disabled. NR starts enabled with WorkingScale 0.70, DualFeature=true, PreUpscale=false, one pass and the baseline sharpness profile. Already-migrated user tuning survives subsequent installs.
+The 0.4.2 default profile is native Streamline DLSS-G input (`FGInput=dlssg`) to DLSS-G output with `FGNvngxReplacement=none`; Ada MFG unlock and Blackwell kernels stay enabled; automatic interpolation/reflex markers remain; forced DMFG stays disabled; flip metering/reflex sync remain disabled. Artur/Enabler Headless remains packaged only as an inactive compatibility fallback. NR starts enabled with WorkingScale 0.70, DualFeature=true, PreUpscale=false, one pass and the baseline sharpness profile. Already-migrated user tuning survives subsequent installs.
 
 ## Verification on 2026-09-09 UTC
 
-- Real pinned upstream archive, headless module and NR model downloaded and verified successfully.
+- Real pinned upstream archive, private Streamline/DLSS-G payload, fallback headless module and NR model downloaded and verified successfully.
 - Six production-path fixture checks passed at 06:38 UTC: mixed routes and startup NR; route-switch rollback; tuning preservation; interrupted-write recovery; conflicting/duplicate target refusal; owned uninstall/rollback with unchanged native-file/save controls.
 - Focused global cleanup check passed at 06:43 UTC: recovery of files and empty directories, external drift refusal, unrelated-file preservation, and lab/recovery scan exclusion.
 - No installed game was modified or launched. These are installer checks, not graphics/runtime proof.
@@ -31,7 +31,7 @@ Local reports:
 
 ## Remaining limits
 
-The stock NR panel is visible in MFG Only. Windows build files are deliberately inactive. Linux storage defaults are machine-specific configuration, with no general Windows storage adapter yet. The installer does not set launch options automatically or establish game compatibility from successful file deployment. A batch is recoverable per target, not an all-games atomic transaction. Stale operation locks require inspection of recovery state before manual removal.
+The stock NR panel is visible in MFG Only. Linux storage defaults are machine-specific configuration. The installer does not set launch options automatically or establish game compatibility from successful file deployment. A batch is recoverable per target, not an all-games atomic transaction. Stale operation locks require inspection of recovery state before manual removal.
 
 ## Panel build activated
 
@@ -52,3 +52,7 @@ GitHub Windows build 34320885964 succeeded. The artifact archive hash, x64 PE id
 ## 0.1.3 interaction update
 
 Added animated activity and elapsed time around long operations, with per-game batch counts and plain-terminal fallback. Removed the preparation prompt and separate SKIP confirmation. Excluded games are listed explicitly; the interactive batch now has one final yes/no confirmation. Cleanup and recovery also use yes/no. Command-line confirmation flags retain their existing contract. Focused checks covered default cancellation, progress completion/error cleanup and animated terminal output. No game operations were run for this UI change.
+
+## Prepared-payload cache recovery
+
+`packages.py` no longer treats reconstructible prepared-payload drift as a permanent install blocker. Listing/hash/manifest/source-identity drift causes the derived `payload/` and `files.json` to be discarded and rebuilt from the still hash-pinned archive. The source archive itself remains hash-guarded. Readonly mode refuses without mutation. Focused regression tests cover listing drift, incomplete extraction, and readonly behavior.
