@@ -1,55 +1,142 @@
 # RTXForge
 
-**GeForce tools, built for Linux.** A Linux graphics-runtime manager targeting Bazzite/Proton, with verified payloads, explicit previews, backups and rollback.
+**GeForce tools, built for Linux.** RTXForge is a Linux/Bazzite/Proton graphics-runtime manager for modern NVIDIA DLSS features, with verified payloads, explicit previews, backups, rollback, and per-game compatibility handling.
+
+> **Worker / development context:** read [`WORKER_CONTEXT.md`](WORKER_CONTEXT.md) before changing runtime architecture, package providers, adoption state, cache behavior, or the current UI backlog.
+
+## Current direction
+
+RTXForge is a Linux application distributed as an AppImage. There is no active Windows client.
+
+The preferred MFG route is:
+
+```text
+game-native Streamline DLSS-G
+        ↓
+RTXForge-MFG / y4my OptiScaler core
+        ↓
+OptiScaler-owned native NVIDIA DLSS-G output
+        ↓
+Ada MFG unlock
+        ↓
+Blackwell kernels
+```
+
+Required baseline:
+
+```ini
+[FrameGen]
+Enabled=true
+FGInput=dlssg
+FGOutput=dlssg
+FGNvngxReplacement=none
+
+[DLSSG]
+AdaMfgUnlock=true
+AdaBlackwellKernels=true
+```
+
+DLSS Enabler / `nvngxfg` is **not** the preferred route, hidden dependency, or automatic fallback.
+
+NR remains a separate track. The target is the complete Proton-working NR route from DLSS-Unlocked, integrated without replacing or destabilizing the known-good MFG path.
+
+## Native MFG menu milestone
+
+The active runtime fork is:
+
+- `lrnolivia/RTXForge-MFG`
+- branch: `rtxforge-proton`
+- known-working checkpoint: `deca7b7a8f1953de3cf6fe2731ede440b3ddaadf`
+- tag: `RTXForge-NativeMFG-v3e-working`
+
+In The Outer Worlds 2 on an RTX 4070 under Proton, v3e proved that the game's native **2X / 3X / 4X** selector can control OptiScaler's real DLSS-G generated-frame count:
+
+```text
+2X -> 1 generated frame
+3X -> 2 generated frames
+4X -> 3 generated frames
+```
+
+Repeated live transitions worked without a fatal error or DLSS-G SetOptions error.
+
+This is **not yet full runtime verification**. Off/Auto/Dynamic semantics and the broader regression matrix still need to be completed, so `runtime_verified=false` remains correct.
+
+The key implementation rule is that the game's early cached `slDLSSGSetOptions` callback stays permanently synthetic. Native requests are captured as control state and consumed by OptiScaler's existing `DLSSG_Dx12::Dispatch()` path. Do not re-enter real DLSS-G from the cached callback or from `hkslSetConstants()`.
 
 ## Native GNOME desktop
 
-## 0.4.2 cache-repair hotfix
+The desktop app provides a unified game library with install profiles, artwork, metadata, package preparation, backups, rollback, repair, uninstall, cleanup, and per-game status.
 
-- Prepared package payloads are now treated as disposable derived cache.
-- Listing/hash/manifest drift triggers a verified rebuild from the pinned source archive instead of blocking all installs with `Payload listing drift`.
-- Dry-run/readonly mode remains non-mutating and reports that a normal Prepare/Install is needed to rebuild stale cache.
-- “Recognize previous installs” no longer blocks a clean reinstall after Uninstall; adoption is only activated when a recognizable external OptiScaler proxy + INI are currently present.
+Current product/UI backlog and worker priorities are maintained in [`WORKER_CONTEXT.md`](WORKER_CONTEXT.md).
 
-## 0.4.2 — Native Streamline MFG default
+## Install profiles
 
-RTXForge now defaults to **native Streamline DLSS-G input → native/private y4my DLSS-G output** with the y4my Ada MFG unlock and Blackwell kernels. `FGNvngxReplacement=none`, so DLSS Enabler is no longer the default generator. Enabler and its companion configuration are excluded from this release.
+| Route | Behavior |
+|---|---|
+| **NR + MFG** | Native Streamline / Ada MFG plus the selected NR layer. |
+| **MFG Only** | Native Streamline / Ada MFG with NR disabled and no NR payload. |
 
-This change follows live testing where Cyberpunk 2077 performed normally on the Streamline/native DLSS-G route while the Enabler route exposed MFG but caused severe performance loss.
+There is no NR-only route.
 
-The default route is therefore **Streamline-native, compatibility-profiled per game**, not globally forced for every title.
+## Run the desktop app
 
+Extract the release and double-click **RUN RTXFORGE GUI**.
 
-**0.3.1 (historical)** separated the NR payload from the then-current headless MFG pipeline, pins the patched NR model, filters Steam tools and apps, fixes full-resolution artwork sizing, restores vivid green accents, and samples each game’s artwork for its card and details accents. Changing package providers or deployment methods should use a full uninstall/reinstall. Proton NR reliability remains unverified.
-
-**0.3.0** adds a unified poster library, automatic keyless SteamGridDB covers, metadata, profile buttons, floating action panels, one-click whole-library install/uninstall and expanded settings. It uses solid colors and defaults to tall posters; capsules and list views are available. Hardware prerequisites are checked before installation.
-
-Extract and double-click **RUN RTXFORGE GUI**. See [desktop guide](docs/DESKTOP.md). The custom repository option is a future UI placeholder only.
+See the [desktop guide](docs/DESKTOP.md).
 
 ## Run the CLI
 
-Extract the release ZIP and double-click **RUN RTXFORGE**. Or run:
+Extract the release and double-click **RUN RTXFORGE**, or run:
 
 ```bash
 bash '/home/loew/Repos/RTXForge/START HERE.sh'
 ```
 
-Choose Install / update, choose a route, then select several game codes or type `ALL`. Preparation runs automatically with visible progress. Review the proposed changes and answer `y` to the single final confirmation. Close the selected games first. Payloads download on first use and are verified before installation. Python 3 and a 7-Zip command are required; the desktop launcher opens an installed terminal.
+Choose Install / update, choose a route, then select game codes or `ALL`. Preparation runs automatically with visible progress. Review the proposed changes and answer the single final confirmation. Close selected games before applying changes.
 
-| Route | Behavior |
-|---|---|
-| NR + MFG | NR enabled at installation/startup, plus native Streamline DLSS-G / Ada MFG. |
-| MFG Only | Native Streamline DLSS-G / Ada MFG, without the NR DLL or NR forwarder. |
+Payloads download on first use and are verified before installation. Python 3 and a 7-Zip-compatible command are required.
 
-There is no NR-only route. The current NR profile uses WorkingScale 0.70, DualFeature enabled and Before Upscaling disabled. Existing tuning is retained after profile migration; selecting NR + MFG always turns NR on before the next launch.
+## Install / uninstall lifecycle
 
-**Panel fix built:** the 0.1.3 ZIP includes the verified RTXForge Proton DLL. `[RTXForge] NrPanel=0` hides the NR panel for MFG Only; `1` displays it for NR + MFG. GitHub compilation and DLL identity checks passed; in-game behavior still needs verification.
+RTXForge determines install state from what exists **now**, not merely from historical metadata.
+
+Expected states:
+
+```text
+CLEAN
+No recognizable OptiScaler install
+No active RTXForge-managed stack
+-> Fresh Install allowed
+
+MANAGED
+RTXForge manifest + managed files present
+-> Repair / Change Profile / Uninstall allowed
+
+EXTERNAL
+Recognizable OptiScaler proxy + INI present
+No valid RTXForge ownership
+-> Adoption may be offered
+```
+
+A completed RTXForge Uninstall must return the game to `CLEAN`. A historical record alone must never force adoption.
+
+The adoption hotfix is implemented: clean post-uninstall games can be installed again, and adoption is offered only when a recognizable external OptiScaler proxy **and** INI are currently present.
+
+## Prepared-package cache self-healing
+
+Prepared package payloads are disposable derived cache.
+
+If payload listing/hash/manifest state drifts, RTXForge does **not** accept the drift. It discards only the invalid derived payload/manifest, re-verifies the pinned source archive, rebuilds the payload, regenerates `files.json`, verifies the result, and continues.
+
+Readonly/dry-run mode remains non-mutating and reports that a normal Prepare/Install is required to repair stale cache.
 
 ## Recovery and advanced cleanup
 
-The menu includes repair, removal of owned files, batch rollback, **global DLSS5 cleanup**, and cleanup restoration. Global cleanup is retained as a separate advanced action. It previews the two NR filenames and `_DLSS5_Backup` directories, verifies recovery copies of every candidate before removal, and uses one yes/no confirmation. Recovery storage and Ada-Lab are excluded. It can affect NR installations outside RTXForge: review the candidate list.
+RTXForge includes repair, owned-file removal, batch rollback, global DLSS5 cleanup, and cleanup restoration.
 
-The default global scan covers the configured Games mount. Additional library roots can be supplied explicitly:
+Global cleanup previews the candidate NR files and `_DLSS5_Backup` directories and verifies recovery copies before removal. Recovery storage and Ada-Lab are excluded.
+
+Additional roots can be supplied explicitly:
 
 ```bash
 ./rtxforge cleanup --roots /path/to/library --dry-run
@@ -57,11 +144,11 @@ The default global scan covers the configured Games mount. Additional library ro
 ./rtxforge restore-cleanup --cleanup-record /path/printed/after/cleanup.json
 ```
 
-Batch installation stops on a failure and records completed and interrupted targets for rollback. New external changes block rollback instead of being overwritten. Keep the printed records and recovery files.
+Batch installation stops on failure and records completed/interrupted targets for rollback. New external changes block rollback instead of being overwritten.
 
 ## Explicit or mixed-route batches
 
-Create a JSON file such as:
+Example target file:
 
 ```json
 [
@@ -70,24 +157,48 @@ Create a JSON file such as:
 ]
 ```
 
+Then:
+
 ```bash
 ./rtxforge prepare --mode nr-mfg
 ./rtxforge install --targets targets.json --dry-run --details
 ./rtxforge install --targets targets.json
 ```
 
-Recognized existing installations can be adopted with `--adopt-existing`; the final yes/no prompt states that adoption is included. Conflicting unrelated injectors still block that game. In the interactive menu, blocked games are clearly listed as excluded. One final yes/no confirmation applies only the ready games. Use `--help` for repair, uninstall, batch-record rollback and explicit noninteractive confirmation options.
+Recognized external installations can be adopted with `--adopt-existing`. Conflicting unrelated injectors still block the affected game.
 
-Native game DLSS/Streamline files and launch options are not globally rewritten. RTXForge uses the private y4my Streamline runtime under `OptiScaler/streamline` for its DLSS-G output and leaves game-native Streamline files untouched. The preview gives the required Proton DLL override; merge it with existing launch options manually. Native frame-generation evidence is required for either route, and detected anti-cheat blocks automatic selection.
+## Game-native files and Streamline
+
+RTXForge does not globally rewrite native game DLSS/Streamline files or launch options.
+
+It uses its own private runtime under `OptiScaler/streamline` for DLSS-G output while leaving game-native Streamline files untouched. The preview shows the Proton DLL override that must be merged with existing launch options.
+
+Native frame-generation evidence is required for automatic selection, and detected anti-cheat blocks automatic selection.
 
 ## Storage and portability
 
-This delivered configuration is pinned to Lauren's Btrfs Games drive and its UUID. Cache, backups and journals live in `/var/mnt/Games/Ada-Lab/RTXForge`, with a 100 GiB reserve. No fallback to the system drive is allowed. Another machine must explicitly configure `provider.json` (mount, UUID, root beneath that mount's `Ada-Lab`, and reserve) or pass `--provider` with an adapted file. The storage adapter is separate from the reusable installer core. AppImage is the supported desktop distribution; KDE integration may follow.
+The delivered development configuration is pinned to Lauren's Btrfs Games drive. Cache, backups, and journals live under:
 
-The original 1.6 implementation remains preserved in the prior project; `preserved-1.6.json` records its location and archive hash for the future native app. It is not the active installer.
+```text
+/var/mnt/Games/Ada-Lab/RTXForge
+```
 
-The active runtime fork is `lrnolivia/RTXForge-MFG`, branch `rtxforge-proton`. Its CI compiles the PE DLL for Proton; RTXForge has no Windows client. A downloaded build artifact can be imported with `./rtxforge import-loader --loader /path/to/extracted/artifact`. This prepares future installations; existing games must be explicitly updated.
+with a 100 GiB reserve and no fallback to the system drive.
 
-See [audit and verification](docs/AUDIT.md) and [source provenance](docs/PROVENANCE.md). Installer checks passed on disposable fixtures; in-game behavior has not been verified by this rewrite.
+Other machines must explicitly configure `provider.json` or pass `--provider` with an adapted provider file.
 
-Activity indicators show scanning, payload preparation, per-game checks, backups/installation and recovery, with elapsed time and game counts. Plain terminals receive start/completion lines instead of animation. Noninteractive command-line confirmation flags remain available for scripts.
+The storage adapter is separate from the reusable installer core.
+
+## Runtime provenance
+
+RTXForge-MFG CI builds the PE runtime for Proton. A downloaded build artifact can be imported with:
+
+```bash
+./rtxforge import-loader --loader /path/to/extracted/artifact
+```
+
+Importing a runtime prepares future installations; existing games must still be explicitly updated.
+
+Compilation, metadata verification, binary identity checks, and deployment do **not** by themselves prove runtime behavior. Controlled game testing remains required.
+
+See [audit and verification](docs/AUDIT.md) and [source provenance](docs/PROVENANCE.md).
