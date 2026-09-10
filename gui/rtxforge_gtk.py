@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'scripts'))
 import gi
 gi.require_version('Gtk','4.0');gi.require_version('Adw','1')
 from gi.repository import Gtk,Adw,GLib,Gio,Gdk,Graphene,Pango,GdkPixbuf
-import ui,library_media
+import ui,library_media,os
 from desktop_service import DesktopService
 
 ACCENT_PROVIDERS={}
@@ -35,11 +35,17 @@ def artwork_accent(path):
     return name
 
 class CoverPicture(Gtk.Picture):
-    # Keep original image pixels without allowing their intrinsic size to widen the grid.
+    # Ask the layout for height at the actual allocated width, not the original minimum.
+    cover_width=158
+    cover_ratio=2/3
+    def do_get_request_mode(self):return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
     def do_measure(self, orientation, for_size):
-        return (0, 0, -1, -1)
+        if orientation==Gtk.Orientation.HORIZONTAL:return (self.cover_width,self.cover_width,-1,-1)
+        height=__import__('math').ceil((for_size if for_size>0 else self.cover_width)/self.cover_ratio)
+        return (height,height,-1,-1)
 
 CSS=b'''
+.title-action { min-width: 26px; min-height: 26px; padding: 8px 12px; margin: 3px; }
 .hero-title { font-size: 29px; font-weight: 800; letter-spacing: -0.8px; }
 .eyebrow { color: #76b900; font-weight: 800; font-size: 10px; letter-spacing: 2px; }
 .hero { background: alpha(@window_fg_color,0.045); border: 1px solid alpha(@window_fg_color,0.06); border-radius: 18px; padding: 20px 24px; }
@@ -59,6 +65,10 @@ CSS=b'''
 .cover-badge.unavailable { color: #ffb3ad; }
 .selection-bar { padding: 12px 20px; background: alpha(@window_fg_color,0.04); }
 .status-strip { padding: 8px 20px; font-size: 12px; }
+.game-hero { background: alpha(@window_fg_color,0.04); border-radius: 18px; padding: 20px; }
+.game-heading { font-size: 27px; font-weight: 800; }
+.game-status { padding: 16px; border-radius: 14px; background: alpha(@window_fg_color,0.06); }
+.game-caption { font-size: 11px; opacity: 0.65; }
 .panel-body { padding: 18px 24px; }
 .profile-toggle:checked { background: alpha(@window_fg_color,0.13); color: @window_fg_color; }
 .progress-orb { border-radius: 999px; background: alpha(@window_fg_color,0.06); padding: 18px; }
@@ -95,9 +105,9 @@ class Window(Adw.ApplicationWindow):
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK if self.settings['dark'] else Adw.ColorScheme.DEFAULT)
         self.overlay=Adw.ToastOverlay();self.set_content(self.overlay);outer=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.overlay.set_child(outer)
         header=Adw.HeaderBar();header.set_title_widget(Adw.WindowTitle(title='RTXForge',subtitle='Your whole library. One place.'))
-        self.refresh=button('Refresh',lambda *_:self.scan());header.pack_start(self.refresh)
-        self.add=button('Add game',self.choose_folder);header.pack_start(self.add)
-        header.pack_end(button('Settings',self.show_settings));header.pack_end(button('Activity',self.show_activity));outer.append(header)
+        self.refresh=self.title_button('view-refresh-symbolic','Refresh library',lambda *_:self.scan());header.pack_start(self.refresh)
+        self.add=self.title_button('list-add-symbolic','Add game folder',self.choose_folder);header.pack_start(self.add)
+        header.pack_end(self.title_button('emblem-system-symbolic','Settings',self.show_settings));header.pack_end(self.title_button('document-open-recent-symbolic','Activity',self.show_activity));outer.append(header)
         top=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=14);margins(top,18);outer.append(top)
         hero=Gtk.Box(spacing=20);hero.add_css_class('hero');top.append(hero)
         title=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=7,hexpand=True);hero.append(title)
@@ -115,6 +125,14 @@ class Window(Adw.ApplicationWindow):
         for toggle,mode in ((self.mfg,'mfg-only'),(self.nr,'nr-mfg')):
             toggle.add_css_class('profile-toggle');toggle.connect('toggled',self.profile_changed,mode);linked.append(toggle)
         (self.nr if self.settings.get('default_profile')=='nr-mfg' else self.mfg).set_active(True);self.profile_note=label('Headless MFG · no NR panel','dim-label');controls.append(self.profile_note)
+        viewbar=Gtk.Box(spacing=10);library_title=label('Your games','heading');library_title.set_hexpand(True);viewbar.append(library_title)
+        viewbox=Gtk.Box();viewbox.add_css_class('linked');viewbar.append(viewbox);self.view_buttons={};first=None
+        for title,key in [('Posters','posters'),('Wide capsules','capsules'),('List','list')]:
+            toggle=Gtk.ToggleButton(icon_name={'posters':'view-grid-symbolic','capsules':'view-dual-symbolic','list':'view-list-symbolic'}[key]);toggle.set_tooltip_text(title);toggle.update_property([Gtk.AccessibleProperty.LABEL],[title]);toggle.add_css_class('title-action')
+            if first:toggle.set_group(first)
+            else:first=toggle
+            toggle.set_active(self.settings.get('library_view','posters')==key)
+            toggle.connect('toggled',self.view_changed,key);viewbox.append(toggle);self.view_buttons[key]=toggle
         filters=Gtk.Box(spacing=8);top.append(filters)
         self.search=Gtk.SearchEntry(placeholder_text='Search your entire library',hexpand=True);self.search.connect('search-changed',lambda *_:self.filter_games());filters.append(self.search)
         filterbox=Gtk.Box();filterbox.add_css_class('linked');filters.append(filterbox);previous=None
@@ -124,6 +142,7 @@ class Window(Adw.ApplicationWindow):
             else:previous=b;b.set_active(True)
             b.connect('toggled',self.filter_changed,key);filterbox.append(b)
         filters.append(button('Select all',lambda *_:self.select_all(True)));filters.append(button('Clear',lambda *_:self.select_all(False)))
+        margins(viewbar,18);viewbar.set_margin_top(0);viewbar.set_margin_bottom(0);outer.append(viewbar)
         scroll=Gtk.ScrolledWindow(vexpand=True,hscrollbar_policy=Gtk.PolicyType.NEVER);outer.append(scroll)
         self.flow=Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,column_spacing=14,row_spacing=16,min_children_per_line=1,max_children_per_line=8,homogeneous=True,valign=Gtk.Align.START);margins(self.flow,18);scroll.set_child(self.flow)
         footer=Gtk.Box(spacing=8);footer.add_css_class('selection-bar');outer.append(footer)
@@ -144,6 +163,14 @@ class Window(Adw.ApplicationWindow):
         else:self.scan()
         if options.smoke_test:GLib.timeout_add(800,self.smoke_library)
 
+    def title_button(self,icon,title,callback):
+        b=Gtk.Button(icon_name=icon);b.set_tooltip_text(title);b.update_property([Gtk.AccessibleProperty.LABEL],[title]);b.add_css_class('title-action');b.connect('clicked',callback);return b
+    def view_changed(self,toggle,key):
+        if not toggle.get_active() or self.settings.get('library_view')==key:return
+        self.settings['library_view']=key
+        self.show_games(self.games,False)
+        if not self.options.demo:
+            self.start('Saving library view',lambda:library_media.save_settings(self.service.config,self.settings),lambda _:self.fetch_media() if self.settings['online_art'] else None)
     def toast(self,text):self.overlay.add_toast(Adw.Toast.new(str(text)))
     def profile_changed(self,toggle,mode):
         if toggle.get_active():
@@ -163,7 +190,7 @@ class Window(Adw.ApplicationWindow):
         compatible=bool(self.hardware_info and self.hardware_info['ready'])
         self.install_all.set_sensitive(enabled and bool(self.games) and compatible);self.uninstall_all.set_sensitive(enabled and bool(self.games))
         for i,b in enumerate(self.action_buttons):b.set_sensitive(enabled and (compatible or i==2) and any(v['check'].get_active() for v in self.cards.values()))
-        for b in (self.refresh,self.add,self.mfg,self.nr):b.set_sensitive(enabled)
+        for b in (self.refresh,self.add,self.mfg,self.nr,*self.view_buttons.values()):b.set_sensitive(enabled)
     def event(self,event):
         if event['kind']=='progress':self.status.set_text(event['label'])
         elif event['kind']=='art':
@@ -234,8 +261,8 @@ class Window(Adw.ApplicationWindow):
         card=Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL if view=='list' else Gtk.Orientation.VERTICAL);card.add_css_class('game-card');card.set_size_request(width+4,-1)
         overlay=Gtk.Overlay(valign=Gtk.Align.START);card.append(overlay)
         pic=CoverPicture(content_fit=Gtk.ContentFit.CONTAIN,can_shrink=True);pic.add_css_class('poster')
-        frame=Gtk.AspectFrame(ratio=width/height,obey_child=False);frame.set_child(pic);frame.set_size_request(width,height)
-        click=Gtk.Button(child=frame);click.add_css_class('poster-button');click.connect('clicked',lambda *_:self.details(game));overlay.set_child(click)
+        pic.cover_width=width;pic.cover_ratio=width/height
+        click=Gtk.Button(child=pic);click.add_css_class('poster-button');click.connect('clicked',lambda *_:self.details(game));overlay.set_child(click)
         fallback=label(game['name'],'poster-fallback');fallback.set_halign(Gtk.Align.CENTER);fallback.set_valign(Gtk.Align.CENTER);fallback.set_max_width_chars(13);overlay.add_overlay(fallback)
         check=Gtk.CheckButton(halign=Gtk.Align.END,valign=Gtk.Align.START);margins(check,10);check.set_tooltip_text('Select '+game['name']);check.connect('toggled',lambda *_:self.selection_changed())
         if view=='list':card.prepend(check);fallback.set_visible(False)
@@ -247,13 +274,13 @@ class Window(Adw.ApplicationWindow):
         title=label(game['name'],'card-title');title.set_lines(2);title.set_ellipsize(Pango.EllipsizeMode.END);title.set_max_width_chars(70 if view=='list' else 24 if view=='capsules' else 18);text.append(title)
         meta=label(game.get('source',''),'card-meta');meta.set_lines(1);meta.set_ellipsize(Pango.EllipsizeMode.END);meta.set_max_width_chars(80 if view=='list' else 28 if view=='capsules' else 22);text.append(meta)
         self.flow.insert(card,-1);wrapper=card.get_parent()
-        entry={'widget':card,'wrapper':wrapper,'check':check,'picture':pic,'fallback':fallback,'meta':meta,'data':game,'size':(width,height),'frame':frame};self.cards[game['game']]=entry;self.paint_card(entry)
+        entry={'widget':card,'wrapper':wrapper,'check':check,'picture':pic,'fallback':fallback,'meta':meta,'data':game,'size':(width,height)};self.cards[game['game']]=entry;self.paint_card(entry)
     def paint_card(self,entry):
         game=entry['data'];path=game.get('capsule') if self.settings.get('library_view')=='capsules' else game.get('poster')
         if path:
             try:
                 texture=Gdk.Texture.new_from_filename(path)
-                entry['frame'].set_ratio(texture.get_width()/texture.get_height())
+                entry['picture'].cover_ratio=texture.get_width()/texture.get_height();entry['picture'].queue_resize()
                 entry['picture'].set_paintable(texture);entry['fallback'].set_visible(False)
                 if game.get('accent_class'):entry['widget'].remove_css_class(game['accent_class'])
                 game['accent_class']=artwork_accent(path);entry['widget'].add_css_class(game['accent_class'])
@@ -290,22 +317,45 @@ class Window(Adw.ApplicationWindow):
                 GLib.idle_add(self.event,{'kind':'art','game':game['game'],'data':data})
         self.start('Loading SteamGridDB posters and metadata',load,lambda _:None,'art')
     def details(self,game):
-        d,b,f=self.open_panel(game['name'])
+        d,b,f=self.open_panel(game['name'],width=820,height=720)
         if game.get('accent_class'):d.add_css_class(game['accent_class'])
-        b.append(label(game.get('description') or 'Game details from your library.'))
-        group=Adw.PreferencesGroup(title='Game information');b.append(group)
-        values=[('Installed profile',game.get('profile','Not installed')),('Compatibility',game.get('blocked') or 'Native DLSS-G detected; install checks still apply'),('Developer',game.get('developers')),('Genre',game.get('genres')),('Released',game.get('release')),('Library',game.get('library')),('Folder',game['game'])]
+        hero=Gtk.Box(spacing=24);hero.add_css_class('game-hero');b.append(hero)
+        path=game.get('poster')
+        if path:
+            try:
+                texture=Gdk.Texture.new_from_filename(path)
+                pic=CoverPicture(content_fit=Gtk.ContentFit.CONTAIN,can_shrink=True,valign=Gtk.Align.START)
+                pic.cover_width=150;pic.cover_ratio=texture.get_width()/texture.get_height();pic.set_paintable(texture);hero.append(pic)
+            except Exception:pass
+        summary=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12,hexpand=True,valign=Gtk.Align.CENTER);hero.append(summary)
+        summary.append(label((game.get('source') or 'YOUR LIBRARY').upper(),'eyebrow'))
+        title=label(game['name'],'game-heading');title.set_max_width_chars(28);summary.append(title)
+        metadata=Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,column_spacing=6,row_spacing=6,max_children_per_line=3)
+        for value in [game.get('release'),game.get('genres'),game.get('developers')]:
+            if value:metadata.insert(label(value,'pill'),-1)
+        summary.append(metadata)
+        status=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=5);status.add_css_class('game-status');summary.append(status)
+        status.append(label(game.get('profile','Installed') if game.get('installed') else 'Ready to enhance' if not game.get('blocked') else 'Installation unavailable','heading'))
+        status.append(label(game.get('blocked') or 'Installed files detected · use Repair to verify' if game.get('installed') else game.get('blocked') or 'Install checks run before changes are made.','dim-label'))
+        if game.get('description'):b.append(label(game['description']))
+        info=Adw.PreferencesGroup();b.append(info)
+        technical=Adw.ExpanderRow(title='Installation details',subtitle='Location, compatibility and storage');info.add(technical)
+        values=[('Compatibility',game.get('blocked') or 'Native DLSS-G detected; runtime not verified'),('Library',game.get('library')),('Folder',game['game'])]
         if game.get('size_bytes'):values.append(('Installed size',f"{game['size_bytes']/1024**3:.1f} GiB"))
-        if game.get('updated'):values.append(('Updated',datetime.datetime.fromtimestamp(game['updated'],datetime.timezone.utc).strftime('%Y-%m-%d')))
         for name,value in values:
-            if value:group.add(row(name,value))
-        if game.get('art_credit'):b.append(label(game['art_credit'],'dim-label'))
-        if game.get('art_link'):b.append(Gtk.LinkButton(uri=game['art_link'],label='View artwork source'))
-        if game.get('media_note'):b.append(label(game['media_note'],'dim-label'))
-        close=button('Close',lambda *_:d.close());close.add_css_class('suggested-action');f.append(close)
-    def launch_action(self,operation,entire=False):
+            if value:technical.add_row(row(name,value))
+        credit=Gtk.Box(spacing=8);b.append(credit)
+        if game.get('art_credit'):credit.append(label(game['art_credit'],'game-caption'))
+        if game.get('art_link'):credit.append(Gtk.LinkButton(uri=game['art_link'],label='Artwork source'))
+        for title,operation in [('Install / update','install'),('Repair','repair'),('Uninstall','uninstall')]:
+            action=button(title,lambda _,op=operation:self.launch_action(op,targets=[game]))
+            if operation=='install':action.add_css_class('suggested-action')
+            if operation=='uninstall':action.add_css_class('bulk-remove')
+            action.set_sensitive((operation=='uninstall' and game.get('installed',False)) or (operation!='uninstall' and not game.get('blocked') and bool(self.hardware_info and self.hardware_info['ready'])))
+            f.append(action)
+    def launch_action(self,operation,entire=False,targets=None):
         if self.busy and self.task_kind!='art':return
-        rows=list(self.games) if entire else [e['data'] for e in self.cards.values() if e['check'].get_active()]
+        rows=targets if targets is not None else list(self.games) if entire else [e['data'] for e in self.cards.values() if e['check'].get_active()]
         if not rows:self.toast('Select games first.');return
         title={'install':'Install','repair':'Repair','uninstall':'Uninstall'}[operation]+(' entire library' if entire else ' selected games')
         d,b,f=self.open_panel(title);d.set_can_close(False)
@@ -350,6 +400,10 @@ class Window(Adw.ApplicationWindow):
         d,b,f=self.open_panel('Activity');text=Gtk.TextView(editable=False,monospace=True,wrap_mode=Gtk.WrapMode.WORD_CHAR);text.get_buffer().set_text('\n'.join(self.log) or 'No activity yet.');b.append(text);f.append(button('Close',lambda *_:d.close()))
     def show_settings(self,*_):
         d,b,f=self.open_panel('Settings')
+        if os.environ.get('APPIMAGE'):
+            b.append(label('Desktop app · 0.4.0','heading'))
+            b.append(button('Install / update this build',self.install_desktop,'forge-primary'))
+            b.append(label('Keep this build in your app menu. Repeating this with a new AppImage updates it; your games and backups stay separate.','dim-label'))
         appearance=Adw.PreferencesGroup(title='Library appearance');b.append(appearance)
         view_group=Gtk.Box(spacing=0);view_group.add_css_class('linked');view_choice={'value':self.settings.get('library_view','posters')};first=None
         for title,key in [('Posters','posters'),('Wide capsules','capsules'),('List','list')]:
@@ -390,9 +444,13 @@ class Window(Adw.ApplicationWindow):
         def save(*_):
             self.settings.update({'library_view':view_choice['value'],'art_scale':int(scale.get_value()),'cache_days':cache.get_value_as_int(),'network_timeout':timeout.get_value_as_int(),'default_profile':'nr-mfg' if default_nr.get_active() else 'mfg-only','dark':dark.get_active(),'online_art':art.get_active(),'steam_metadata':metadata.get_active(),'recognize_previous':adopt.get_active()})
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK if self.settings['dark'] else Adw.ColorScheme.DEFAULT)
+            self.view_buttons[self.settings['library_view']].set_active(True)
             if self.options.demo:d.close();self.show_games(self.games,False);return
             self.start('Saving settings',lambda:library_media.save_settings(self.service.config,self.settings),lambda _:(d.close(),self.show_games(self.games,False),self.fetch_media(True) if self.settings['online_art'] else None))
         f.append(button('Save settings',save,'forge-primary'))
+    def install_desktop(self,*_):
+        import desktop_install
+        self.start('Installing desktop app',desktop_install.install,lambda _:self.toast('RTXForge installed in your app menu. This build is now the default.'))
     def show_undo(self):
         if self.options.demo:
             d,b,f=self.open_panel('Undo previous changes');b.append(label('Your install and uninstall backups will appear here.'));return

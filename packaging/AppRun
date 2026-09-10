@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+root="${APPDIR:?}/usr/share/rtxforge"
+if [ "${1:-}" = --install ]; then
+    exec /usr/bin/python3 -B "$root/scripts/desktop_install.py"
+fi
+exec /usr/bin/python3 -B "$root/gui/rtxforge_gtk.py" "$@"
