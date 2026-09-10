@@ -28,7 +28,8 @@ def artwork_accent(path):
         provider.load_from_data((f'.game-card.{name}.selected {{ border-color: {color}; box-shadow: 0 2px 12px alpha({color},0.28); }} '
             f'.game-card.{name}:hover {{ border-color: alpha({color},0.65); }} '
             f'.{name} check:checked, .{name} button.suggested-action {{ background: {color}; color: #101010; }} '
-            f'.{name} .cover-badge {{ color: {color}; }} '
+            f'.{name} .game-status {{ border-left: 3px solid {color}; background: alpha({color},0.12); }} '
+            f'.{name} .game-heading, .{name} .eyebrow {{ color: {color}; }} '
             f'.{name} button:focus-visible {{ outline-color: {color}; }}').encode())
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION+1)
         ACCENT_PROVIDERS[name]=provider
@@ -49,6 +50,14 @@ class HeroPicture(Gtk.Picture):
         return (0,0,-1,-1) if orientation==Gtk.Orientation.HORIZONTAL else (300,300,-1,-1)
 
 CSS=b'''
+.view-action { padding: 5px 8px; margin: 0; min-width: 20px; }
+.profile-toggle { padding: 10px 22px; font-weight: 800; }
+.profile-nr:checked { background: #aa8be0; color: #17121e; }
+.profile-mfg:checked { background: #76b900; color: #12180a; }
+.cover-badge.state-nr { background: #aa8be0; color: #17121e; }
+.cover-badge.state-mfg { background: #76b900; color: #12180a; }
+.cover-badge.state-unavailable { background: #5b5b62; color: white; }
+.status-pill { border-radius: 22px; padding: 9px 16px; margin: 8px; background: @card_bg_color; box-shadow: 0 3px 10px alpha(black,0.25); }
 .title-action { min-width: 26px; min-height: 26px; padding: 8px 12px; margin: 3px; }
 .hero-title { font-size: 29px; font-weight: 800; letter-spacing: -0.8px; }
 .eyebrow { color: #76b900; font-weight: 800; font-size: 10px; letter-spacing: 2px; }
@@ -115,7 +124,7 @@ class Window(Adw.ApplicationWindow):
         self.add=self.title_button('list-add-symbolic','Add game folder',self.choose_folder);header.pack_start(self.add)
         header.pack_end(self.title_button('emblem-system-symbolic','Settings',self.show_settings));header.pack_end(self.title_button('document-open-recent-symbolic','Activity',self.show_activity));outer.append(header)
         top=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=14);margins(top,18);outer.append(top)
-        hero=Gtk.Box(spacing=20);hero.add_css_class('hero');top.append(hero)
+        hero=Gtk.Box(spacing=20);hero.add_css_class('hero');hero_reveal=Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_UP,reveal_child=True,transition_duration=180);hero_reveal.set_child(hero);top.append(hero_reveal)
         title=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=7,hexpand=True);hero.append(title)
         title.append(label('GEFORCE / BUILT FOR LINUX','eyebrow'));title.append(label('Forge your entire library.','hero-title'))
         self.stats=label('Finding your games…','dim-label');title.append(self.stats)
@@ -125,16 +134,16 @@ class Window(Adw.ApplicationWindow):
         self.uninstall_all=button('Uninstall entire library',lambda *_:self.launch_action('uninstall',True),'bulk-remove');bulk.append(self.uninstall_all)
         self.install_all.set_tooltip_text('One click: prepare, back up and install wherever possible across every library. Incompatible games are skipped.')
         self.uninstall_all.set_tooltip_text('One click: remove recorded OptiScaler installs across every library, with backups. Your games remain installed.')
-        controls=Gtk.Box(spacing=10);top.append(controls);controls.append(label('Install profile','dim-label'))
+        controls=Gtk.Box(spacing=10,halign=Gtk.Align.CENTER);top.append(controls);controls.append(label('Install profile','dim-label'))
         linked=Gtk.Box();linked.add_css_class('linked');controls.append(linked)
         self.mfg=Gtk.ToggleButton(label='MFG Only');self.nr=Gtk.ToggleButton(label='NR + MFG');self.nr.set_group(self.mfg)
-        for toggle,mode in ((self.mfg,'mfg-only'),(self.nr,'nr-mfg')):
-            toggle.add_css_class('profile-toggle');toggle.connect('toggled',self.profile_changed,mode);linked.append(toggle)
+        for toggle,mode in ((self.nr,'nr-mfg'),(self.mfg,'mfg-only')):
+            toggle.add_css_class('profile-nr' if mode=='nr-mfg' else 'profile-mfg');toggle.add_css_class('profile-toggle');toggle.connect('toggled',self.profile_changed,mode);linked.append(toggle)
         (self.nr if self.settings.get('default_profile')=='nr-mfg' else self.mfg).set_active(True);self.profile_note=label('Native Streamline MFG · no NR panel','dim-label');controls.append(self.profile_note)
         viewbar=Gtk.Box(spacing=10);library_title=label('Your games','heading');library_title.set_hexpand(True);viewbar.append(library_title)
         viewbox=Gtk.Box();viewbox.add_css_class('linked');viewbar.append(viewbox);self.view_buttons={};first=None
         for title,key in [('Posters','posters'),('Wide capsules','capsules'),('List','list')]:
-            toggle=Gtk.ToggleButton(icon_name={'posters':'view-grid-symbolic','capsules':'view-dual-symbolic','list':'view-list-symbolic'}[key]);toggle.set_tooltip_text(title);toggle.update_property([Gtk.AccessibleProperty.LABEL],[title]);toggle.add_css_class('title-action')
+            toggle=Gtk.ToggleButton(icon_name={'posters':'view-grid-symbolic','capsules':'view-dual-symbolic','list':'view-list-symbolic'}[key]);toggle.set_tooltip_text(title);toggle.update_property([Gtk.AccessibleProperty.LABEL],[title]);toggle.add_css_class('view-action')
             if first:toggle.set_group(first)
             else:first=toggle
             toggle.set_active(self.settings.get('library_view','posters')==key)
@@ -150,14 +159,18 @@ class Window(Adw.ApplicationWindow):
         filters.append(button('Select all',lambda *_:self.select_all(True)));filters.append(button('Clear',lambda *_:self.select_all(False)))
         margins(viewbar,18);viewbar.set_margin_top(0);viewbar.set_margin_bottom(0);outer.append(viewbar)
         scroll=Gtk.ScrolledWindow(vexpand=True,hscrollbar_policy=Gtk.PolicyType.NEVER);outer.append(scroll)
+        def collapse_header(adj):
+            if adj.get_value()>120 and adj.get_upper()-adj.get_page_size()>300:hero_reveal.set_reveal_child(False)
+            elif adj.get_value()<10:hero_reveal.set_reveal_child(True)
+        scroll.get_vadjustment().connect('value-changed',collapse_header)
         self.flow=Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,column_spacing=14,row_spacing=16,min_children_per_line=1,max_children_per_line=8,homogeneous=True,valign=Gtk.Align.START);margins(self.flow,18);scroll.set_child(self.flow)
         footer=Gtk.Box(spacing=8);footer.add_css_class('selection-bar');outer.append(footer)
         self.selected_label=label('0 selected',css='heading');self.selected_label.set_hexpand(True);footer.append(self.selected_label)
         for name,op,css in [('Install selected','install','forge-primary'),('Repair','repair',None),('Uninstall selected','uninstall','bulk-remove')]:
             b=button(name,lambda _,action=op:self.launch_action(action),css);footer.append(b);self.action_buttons.append(b)
-        statusbox=Gtk.Box(spacing=10);statusbox.add_css_class('status-strip');outer.append(statusbox)
-        self.spinner=Gtk.Spinner();statusbox.append(self.spinner);self.status=label('Ready');self.status.set_hexpand(True);statusbox.append(self.status)
-        self.elapsed=label('','dim-label');statusbox.append(self.elapsed);self.progress=Gtk.ProgressBar();outer.append(self.progress)
+        statusbox=Gtk.Box(spacing=10,halign=Gtk.Align.CENTER);statusbox.add_css_class('status-pill');outer.append(statusbox)
+        self.spinner=Gtk.Spinner();statusbox.append(self.spinner);self.status=label('Ready');self.status.set_max_width_chars(48);self.status.set_ellipsize(Pango.EllipsizeMode.END);statusbox.append(self.status)
+        self.elapsed=label('','dim-label');statusbox.append(self.elapsed);self.progress=Gtk.ProgressBar(width_request=130,valign=Gtk.Align.CENTER);statusbox.append(self.progress)
         GLib.timeout_add(180,self.tick)
         if options.demo:
             games=demo_games()
@@ -277,7 +290,7 @@ class Window(Adw.ApplicationWindow):
         if view=='list':card.prepend(check);fallback.set_visible(False)
         else:overlay.add_overlay(check)
         badge=label('Unavailable' if game.get('blocked') else game.get('profile','Ready') if game.get('installed') else 'Ready','cover-badge');badge.set_halign(Gtk.Align.START);badge.set_valign(Gtk.Align.END);margins(badge,8)
-        if game.get('blocked'):badge.add_css_class('unavailable')
+        badge.add_css_class('state-unavailable' if game.get('blocked') else 'state-nr' if game.get('profile')=='NR + MFG' else 'state-mfg' if game.get('installed') else 'state-ready')
         if view!='list':overlay.add_overlay(badge)
         text=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=5,hexpand=view=='list',valign=Gtk.Align.CENTER);text.add_css_class('card-info');card.append(text)
         title=label(game['name'],'card-title');title.set_lines(2);title.set_ellipsize(Pango.EllipsizeMode.END);title.set_max_width_chars(70 if view=='list' else 24 if view=='capsules' else 18);text.append(title)
@@ -296,7 +309,7 @@ class Window(Adw.ApplicationWindow):
             except Exception:entry['fallback'].set_visible(True)
         else:
             entry['picture'].set_paintable(None);entry['fallback'].set_visible(True)
-        entry['meta'].set_text(game.get('genres') or game.get('source',''))
+        entry['meta'].set_text((game.get('mfg_route') or 'MFG configuration detected') if game.get('installed') else game.get('source',''))
         entry['widget'].set_tooltip_text(game['name']+'\n'+(game.get('art_credit') or 'Artwork pending'))
     def filter_games(self):
         if not hasattr(self,'search'):return
@@ -326,7 +339,7 @@ class Window(Adw.ApplicationWindow):
                 GLib.idle_add(self.event,{'kind':'art','game':game['game'],'data':data})
         self.start('Loading SteamGridDB posters and metadata',load,lambda _:None,'art')
     def details(self,game):
-        d,b,f=self.open_panel(game['name'],width=820,height=720)
+        d,b,f=self.open_panel(game['name'],width=820,height=720);b.remove_css_class('panel-body')
         if game.get('accent_class'):d.add_css_class(game['accent_class'])
         stage=Gtk.Overlay();b.append(stage)
         background=Gtk.Overlay(valign=Gtk.Align.START);stage.set_child(background)
@@ -354,17 +367,21 @@ class Window(Adw.ApplicationWindow):
         status=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=5);status.add_css_class('game-status');summary.append(status)
         status.append(label(game.get('profile','Installed') if game.get('installed') else 'Ready to enhance' if not game.get('blocked') else 'Installation unavailable','heading'))
         status.append(label(game.get('blocked') or 'Installed files detected · use Repair to verify' if game.get('installed') else game.get('blocked') or 'Install checks run before changes are made.','dim-label'))
-        if game.get('description'):b.append(label(game['description']))
-        info=Adw.PreferencesGroup();b.append(info)
+        if game.get('description'):
+            description=label(game['description']);margins(description,20);b.append(description)
+        info=Adw.PreferencesGroup();margins(info,20);b.append(info)
         technical=Adw.ExpanderRow(title='Installation details',subtitle='Location, compatibility and storage');info.add(technical)
         values=[('Compatibility',game.get('blocked') or 'Native DLSS-G detected; runtime not verified'),('MFG route',game.get('mfg_route')),('Library',game.get('library')),('Folder',game['game'])]
         if game.get('size_bytes'):values.append(('Installed size',f"{game['size_bytes']/1024**3:.1f} GiB"))
         for name,value in values:
             if value:technical.add_row(row(name,value))
-        credit=Gtk.Box(spacing=8);b.append(credit)
+        credit=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);margins(credit,12);popover=Gtk.Popover();popover.set_child(credit);credits=Gtk.MenuButton(label='Artwork credits',halign=Gtk.Align.START);credits.add_css_class('pill');credits.set_margin_start(20);credits.set_popover(popover);b.append(credits)
         if game.get('art_credit'):credit.append(label(game['art_credit'],'game-caption'))
         if game.get('art_link'):credit.append(Gtk.LinkButton(uri=game['art_link'],label='Poster'))
         if game.get('hero_link'):credit.append(Gtk.LinkButton(uri=game['hero_link'],label='Hero · '+game.get('hero_credit','Artwork source')))
+        folder=button('Open folder',lambda *_:Gio.AppInfo.launch_default_for_uri(Path(game['game']).as_uri(),None));f.append(folder)
+        if game.get('appid') and game.get('source')=='Steam':
+            launch=button('Play',lambda *_:Gio.AppInfo.launch_default_for_uri('steam://rungameid/'+str(game['appid']),None));launch.set_sensitive(not self.options.demo);f.append(launch)
         for title,operation in [('Install / update','install'),('Repair','repair'),('Uninstall','uninstall')]:
             action=button(title,lambda _,op=operation:self.launch_action(op,targets=[game]))
             if operation=='install':action.add_css_class('suggested-action')
@@ -419,7 +436,7 @@ class Window(Adw.ApplicationWindow):
     def show_settings(self,*_):
         d,b,f=self.open_panel('Settings')
         if os.environ.get('APPIMAGE'):
-            b.append(label('Desktop app · 0.4.2','heading'))
+            b.append(label('Desktop app · 0.4.3','heading'))
             b.append(button('Install / update this build',self.install_desktop,'forge-primary'))
             b.append(label('Keep this build in your app menu. Repeating this with a new AppImage updates it; your games and backups stay separate.','dim-label'))
         appearance=Adw.PreferencesGroup(title='Library appearance');b.append(appearance)
