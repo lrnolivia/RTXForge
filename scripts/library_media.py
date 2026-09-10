@@ -44,7 +44,7 @@ class LibraryMedia:
         if record.exists():
             try:
                 saved=json.loads(record.read_text());result=saved['data']
-                if not refresh and saved.get('provider')=='sgdb-public-v2' and time.time()-saved['time']<int(self.settings.get('cache_days',7))*86400 and (self.settings.get('library_view')!='capsules' or result.get('capsule')) and (not result.get('poster') or Path(result['poster']).is_file()):return result
+                if not refresh and saved.get('provider')=='sgdb-public-v3' and time.time()-saved['time']<int(self.settings.get('cache_days',7))*86400 and (self.settings.get('library_view')!='capsules' or result.get('capsule')) and (not result.get('poster') or Path(result['poster']).is_file()):return result
             except (OSError,ValueError,KeyError):result={}
         appid=str(row.get('appid') or '')
         if not appid.isdigit():appid=''
@@ -92,7 +92,24 @@ class LibraryMedia:
                 if wide_url:
                     data=request(wide_url,limit=8*1024**2,timeout=timeout);path=self.root/(ident+'.wide');t.atomic_file(path,data,0o600);result['capsule']=str(path)
             except Exception:pass
+        hero_candidates=[]
+        if result.get('sgdb_game_id'):
+            try:
+                payload={'asset_type':'hero','game_id':[result['sgdb_game_id']],'page':0,'limit':4,'static':True,'animated':False,'nsfw':False,'humor':False,'epilepsy':False,'untagged':True,'order':'score_desc'}
+                assets=json_request('https://www.steamgriddb.com/api/public/search/assets',payload,timeout=timeout).get('data',{}).get('assets',[])
+                for asset in assets:
+                    if not any(asset.get(k) for k in ('nsfw','humor','epilepsy','is_animated','is_deleted','processing')) and asset.get('width',0)>asset.get('height',0):
+                        hero_candidates.append((asset['url'],'SteamGridDB · '+asset.get('author',{}).get('name','Community artwork'),'https://www.steamgriddb.com/hero/'+str(int(asset['id']))));break
+            except Exception:pass
+        if appid:hero_candidates.append((f'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/library_hero.jpg','Steam','https://store.steampowered.com/app/'+appid))
+        for url,credit,link in hero_candidates:
+            try:
+                data=request(url,limit=12*1024**2,timeout=timeout)
+                if not (data.startswith(b'\x89PNG\r\n') or data.startswith(b'\xff\xd8') or data[:4]==b'RIFF'):continue
+                path=self.root/(ident+'.hero');t.atomic_file(path,data,0o600)
+                result.update({'hero':str(path),'hero_credit':credit,'hero_link':link});break
+            except Exception:pass
         if errors:result['media_note']='; '.join(dict.fromkeys(errors))
         else:result.pop('media_note',None)
-        t.atomic_file(record,json.dumps({'time':time.time(),'provider':'sgdb-public-v2','data':result}).encode(),0o600)
+        t.atomic_file(record,json.dumps({'time':time.time(),'provider':'sgdb-public-v3','data':result}).encode(),0o600)
         return result

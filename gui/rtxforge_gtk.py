@@ -44,6 +44,10 @@ class CoverPicture(Gtk.Picture):
         height=__import__('math').ceil((for_size if for_size>0 else self.cover_width)/self.cover_ratio)
         return (height,height,-1,-1)
 
+class HeroPicture(Gtk.Picture):
+    def do_measure(self,orientation,for_size):
+        return (0,0,-1,-1) if orientation==Gtk.Orientation.HORIZONTAL else (300,300,-1,-1)
+
 CSS=b'''
 .title-action { min-width: 26px; min-height: 26px; padding: 8px 12px; margin: 3px; }
 .hero-title { font-size: 29px; font-weight: 800; letter-spacing: -0.8px; }
@@ -65,7 +69,9 @@ CSS=b'''
 .cover-badge.unavailable { color: #ffb3ad; }
 .selection-bar { padding: 12px 20px; background: alpha(@window_fg_color,0.04); }
 .status-strip { padding: 8px 20px; font-size: 12px; }
-.game-hero { background: alpha(@window_fg_color,0.04); border-radius: 18px; padding: 20px; }
+.game-hero { padding: 0 18px 12px; }
+.hero-fade { background: linear-gradient(to bottom, alpha(@window_bg_color,0.05) 0%, alpha(@window_bg_color,0.35) 40%, @window_bg_color 100%); }
+.profile-poster { border: 3px solid @window_bg_color; border-radius: 10px; box-shadow: 0 8px 24px alpha(black,0.4); }
 .game-heading { font-size: 27px; font-weight: 800; }
 .game-status { padding: 16px; border-radius: 14px; background: alpha(@window_fg_color,0.06); }
 .game-caption { font-size: 11px; opacity: 0.65; }
@@ -196,6 +202,9 @@ class Window(Adw.ApplicationWindow):
         elif event['kind']=='art':
             card=self.cards.get(event['game'])
             if card:card['data'].update(event['data']);self.paint_card(card)
+            if getattr(self,'detail_game',None)==event['game'] and self.dialog==getattr(self,'detail_dialog',None) and event['data'].get('hero'):
+                try:self.detail_banner.set_paintable(Gdk.Texture.new_from_filename(event['data']['hero']))
+                except Exception:pass
         else:self.log.append(event['text']);self.log=self.log[-400:]
         if self.dialog and hasattr(self,'job_label') and self.job_label:self.job_label.set_text(self.status.get_text())
         return False
@@ -319,15 +328,23 @@ class Window(Adw.ApplicationWindow):
     def details(self,game):
         d,b,f=self.open_panel(game['name'],width=820,height=720)
         if game.get('accent_class'):d.add_css_class(game['accent_class'])
-        hero=Gtk.Box(spacing=24);hero.add_css_class('game-hero');b.append(hero)
+        stage=Gtk.Overlay();b.append(stage)
+        background=Gtk.Overlay(valign=Gtk.Align.START);stage.set_child(background)
+        banner=HeroPicture(content_fit=Gtk.ContentFit.COVER,can_shrink=True);background.set_child(banner)
+        self.detail_game=game['game'];self.detail_dialog=d;self.detail_banner=banner
+        if game.get('hero'):
+            try:banner.set_paintable(Gdk.Texture.new_from_filename(game['hero']))
+            except Exception:pass
+        fade=Gtk.Box();fade.add_css_class('hero-fade');background.add_overlay(fade)
+        hero=Gtk.Box(spacing=24);hero.set_margin_top(180);hero.add_css_class('game-hero');stage.add_overlay(hero);stage.set_measure_overlay(hero,True)
         path=game.get('poster')
         if path:
             try:
                 texture=Gdk.Texture.new_from_filename(path)
                 pic=CoverPicture(content_fit=Gtk.ContentFit.CONTAIN,can_shrink=True,valign=Gtk.Align.START)
-                pic.cover_width=150;pic.cover_ratio=texture.get_width()/texture.get_height();pic.set_paintable(texture);hero.append(pic)
+                pic.add_css_class('profile-poster');pic.cover_width=150;pic.cover_ratio=texture.get_width()/texture.get_height();pic.set_paintable(texture);hero.append(pic)
             except Exception:pass
-        summary=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12,hexpand=True,valign=Gtk.Align.CENTER);hero.append(summary)
+        summary=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12,hexpand=True,valign=Gtk.Align.START);summary.set_margin_top(70);hero.append(summary)
         summary.append(label((game.get('source') or 'YOUR LIBRARY').upper(),'eyebrow'))
         title=label(game['name'],'game-heading');title.set_max_width_chars(28);summary.append(title)
         metadata=Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,column_spacing=6,row_spacing=6,max_children_per_line=3)
@@ -346,7 +363,8 @@ class Window(Adw.ApplicationWindow):
             if value:technical.add_row(row(name,value))
         credit=Gtk.Box(spacing=8);b.append(credit)
         if game.get('art_credit'):credit.append(label(game['art_credit'],'game-caption'))
-        if game.get('art_link'):credit.append(Gtk.LinkButton(uri=game['art_link'],label='Artwork source'))
+        if game.get('art_link'):credit.append(Gtk.LinkButton(uri=game['art_link'],label='Poster'))
+        if game.get('hero_link'):credit.append(Gtk.LinkButton(uri=game['hero_link'],label='Hero · '+game.get('hero_credit','Artwork source')))
         for title,operation in [('Install / update','install'),('Repair','repair'),('Uninstall','uninstall')]:
             action=button(title,lambda _,op=operation:self.launch_action(op,targets=[game]))
             if operation=='install':action.add_css_class('suggested-action')
@@ -401,7 +419,7 @@ class Window(Adw.ApplicationWindow):
     def show_settings(self,*_):
         d,b,f=self.open_panel('Settings')
         if os.environ.get('APPIMAGE'):
-            b.append(label('Desktop app · 0.4.0','heading'))
+            b.append(label('Desktop app · 0.4.1','heading'))
             b.append(button('Install / update this build',self.install_desktop,'forge-primary'))
             b.append(label('Keep this build in your app menu. Repeating this with a new AppImage updates it; your games and backups stay separate.','dim-label'))
         appearance=Adw.PreferencesGroup(title='Library appearance');b.append(appearance)

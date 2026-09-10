@@ -16,14 +16,19 @@ def install():
             if target.exists():shutil.copyfile(target,root/'RTXForge.previous.AppImage');(root/'RTXForge.previous.AppImage').chmod(0o755)
             os.replace(stage,target)
         finally:stage.unlink(missing_ok=True)
-    icon=data/'icons/hicolor/scalable/apps/io.github.lrnolivia.RTXForge.svg';icon.parent.mkdir(parents=True,exist_ok=True)
-    shutil.copyfile(Path(__file__).resolve().parents[1]/'gui/icons/hicolor/scalable/apps/io.github.lrnolivia.RTXForge.svg',icon)
+    assets=Path(__file__).resolve().parents[1]/'gui/icons/hicolor'
+    for size in ('scalable','64x64','128x128','256x256'):
+        suffix='svg' if size=='scalable' else 'png'
+        icon=data/f'icons/hicolor/{size}/apps/io.github.lrnolivia.RTXForge.{suffix}'
+        icon.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(assets/f'{size}/apps/{icon.name}',icon)
+    icon=data/'icons/hicolor/256x256/apps/io.github.lrnolivia.RTXForge.png'
     apps=data/'applications';apps.mkdir(parents=True,exist_ok=True)
     # Desktop Exec quoting is distinct from shell quoting; percent signs are field codes.
     quoted=str(target).replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$').replace('%','%%')
     desktop=apps/'io.github.lrnolivia.RTXForge.desktop'
-    desktop.write_text('[Desktop Entry]\nType=Application\nName=RTXForge\nComment=GeForce tools for Linux\nExec="'+quoted+'"\nIcon=io.github.lrnolivia.RTXForge\nTerminal=false\nCategories=Game;Utility;\nStartupWMClass=io.github.lrnolivia.RTXForge\n')
+    desktop.write_text('[Desktop Entry]\nType=Application\nName=RTXForge\nComment=GeForce tools for Linux\nExec="'+quoted+'"\nIcon='+str(icon)+'\nTerminal=false\nCategories=Game;Utility;\nStartupWMClass=io.github.lrnolivia.RTXForge\n')
     if shutil.which('update-desktop-database'):subprocess.run(['update-desktop-database',str(apps)],check=False,capture_output=True)
+    if shutil.which('gtk-update-icon-cache'):subprocess.run(['gtk-update-icon-cache','-f','-t',str(data/'icons/hicolor')],check=False,capture_output=True)
     return str(target)
 
 if __name__=='__main__':print(install())

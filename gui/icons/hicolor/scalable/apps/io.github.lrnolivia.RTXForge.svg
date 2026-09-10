@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect x="4" y="4" width="120" height="120" rx="28" fill="#1b2418"/><path d="M30 30h49l19 19-11 27H65l24 23H63L42 77v22H25V48h17v13h33l4-12-7-4H30z" fill="#76b900"/><path d="M88 85h16v15H88z" fill="#b8f25a"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+ <linearGradient id="shell" x2=".8" y2="1"><stop stop-color="#343b40"/><stop offset="1" stop-color="#101416"/></linearGradient>
+ <linearGradient id="core" x2=".6" y2="1"><stop stop-color="#c7ff53"/><stop offset=".5" stop-color="#91d51b"/><stop offset="1" stop-color="#65a300"/></linearGradient>
+</defs>
+<rect x="24" y="30" width="464" height="464" rx="110" fill="#080b0d"/>
+<rect x="24" y="18" width="464" height="464" rx="110" fill="url(#shell)" stroke="#424b50" stroke-width="3"/>
+<path d="M111 104h232l62 62v185l-61 61H169l-62-62V169z" fill="#080d10" stroke="#4b5847" stroke-width="3"/>
+<g fill="#59624c"><path d="M173 83h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zM173 411h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zm51 0h15v22h-15zM85 175h22v15H85zm0 51h22v15H85zm0 51h22v15H85zm0 51h22v15H85zM405 175h22v15h-22zm0 51h22v15h-22zm0 51h22v15h-22zm0 51h22v15h-22z"/></g>
+<path d="M162 151h180l-25 43H207v42h97l-25 43h-72v78h-45z" fill="url(#core)"/>
+<path d="m312 258 40 0-57 98h-51z" fill="url(#core)"/>
+<path d="m327 217 19-33 26 45-19 33z" fill="#d7ff82"/>
+<path d="M70 407h54" stroke="#91d51b" stroke-width="7" stroke-linecap="round"/>
+<circle cx="421" cy="91" r="8" fill="#b6f13e"/>
+</svg>
