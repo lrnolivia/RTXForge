@@ -46,6 +46,21 @@ def make(target,state,sources,operation='install',adopt=False):
         t.need(not any(name in r for name in ('easyanticheat','battleye','eaanticheat','anticheatexpert','start_protected_game')),'Anti-cheat evidence: '+r)
     proxies=[r for r in files.values() if P(r).parent==directory and P(r).name.lower() in t.PROXIES]
     preserved_helpers={r for r in proxies if r not in owned and native_debug_helper(game/r)}
+
+    # Preserve exact game-side proxy-shaped DLLs that have been explicitly
+    # compatibility-profiled. They remain external inputs and are never
+    # adopted or overwritten by RTXForge.
+    for r in proxies:
+        if r in owned or r in preserved_helpers:
+            continue
+        reason=compatibility.preserved_proxy_reason(
+            target,
+            r,
+            t.digest(game/r),
+        )
+        if reason:
+            preserved_helpers.add(r)
+
     proxies=[r for r in proxies if r not in preserved_helpers]
     proxy=target.get('proxy') or (P(proxies[0]).name.lower() if len(proxies)==1 else 'dxgi.dll')
     t.need(proxy in t.SUPPORTED_PROXIES,'Unsupported existing alias; select dxgi/winmm/version explicitly')
