@@ -1,14 +1,11 @@
-# Proton runtime implementation
+# Engine integration — 0.5.0
 
-The temporary handoff has been translated into these durable requirements:
+Current implementation: `engine/rtxengine.py`, derived from the supplied Handoff 188 RC1.38 archive; original hashes in `engine/SOURCE.json`. Original extracted source remains locally under ignored `engine/imported-rc1.38/`.
 
-1. Keep native Streamline DLSS-G input/output, Ada MFG unlock and Blackwell kernels; exclude Enabler.
-2. Advertise up to three generated frames (4X) at early capability query and preserve this ceiling in the native state path. Never overwrite the game's multiplier selection. Keep struct-version bounds.
-3. Pin and ship the compiled fork DLL, not just the source patch.
-4. Compose the separate DLSS-Unlocked NR layer without substituting its MFG defaults. Verify each member by SHA256.
-5. Preserve clean/managed/external install state handling, rollback and derived-cache self-repair.
-6. Keep Linux AppImage product scope. No Windows client or Windows-only NR gate.
+Both desktop and terminal frontends select complete providers from `providers/lock.json`. The latest user instruction supersedes historical single-provider guidance. The old custom runtime is preserved as history, not shipped.
 
-Runtime acceptance remains distinct: cold-start a selected supported title under Proton, check native 2X/3X/4X settings and actual MFG output, confirm no Enabler and no regression, then assess NR. No unattended game fleet deployment is authorized by source work.
+Corrected startup route: FrameGen Enabled=false, FGInput=nofg, FGOutput=nofg. Upstream initializes a selected DLSSG output independently of Enabled, so RC1.38 was not truly dormant. Ada unlock and NR startup activation are separately explicit.
 
-The next release addresses the remaining UI, per-game notes, diagnostics, reports and launch/test requests in rtxforgenotes.md.
+New payloads refuse root native DLSS/Streamline replacements. Restore refuses removing a native root NVIDIA/Streamline DLL if no original backup was recorded. Launch-option restoration remains scoped to recorded engine changes.
+
+The user reported all games lost native 2× after a previous uninstall. Available receipts did not establish the cause; Cyberpunk's native DLLs were present during read-only inspection. No games have been repaired, redeployed or launched by this development task. Validate launch/native 2×, then NR and native MFG with user testing. Do not label source-level or fixture checks as game verification.

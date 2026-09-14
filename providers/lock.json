@@ -1,0 +1,34 @@
+{
+  "y4my": {
+    "id": "y4my",
+    "name": "y4my Multipass",
+    "repo": "y4my4my4m/OptiScaler_DLSSNR_Multipass_MFG",
+    "branch": "dlss-neural-rendering",
+    "branch_commit": "7b7220bbb4994a9c8ae60cfc75a44cb67995efb8",
+    "commit": "7b7220bbb4994a9c8ae60cfc75a44cb67995efb8",
+    "tag": "v10.0.0-dev-fork-y4my4my4m-v4",
+    "archive": "OptiScaler_v10.0.0-dev-fork-y4my4my4m-v4_20260905_with_DLSS.7z",
+    "url": "https://github.com/y4my4my4m/OptiScaler_DLSSNR_Multipass_MFG/releases/download/v10.0.0-dev-fork-y4my4my4m-v4/OptiScaler_v10.0.0-dev-fork-y4my4my4m-v4_20260905_with_DLSS.7z",
+    "sha256": "9d7824cc9cfb15265bc6438b4638aad74ff9cd6d1d3488ab73724affb386a8b0",
+    "release_size": 117366545,
+    "asset_id": null,
+    "verified_at": "2026-09-14",
+    "runtime_verified": false
+  },
+  "dlss-unlocked": {
+    "id": "dlss-unlocked",
+    "name": "DLSS-Unlocked",
+    "repo": "ShyVortex/dlss-unlocked",
+    "branch": "main",
+    "branch_commit": "00fbc5873363cd0a2e93867b365506e90732687f",
+    "commit": "00fbc5873363cd0a2e93867b365506e90732687f",
+    "tag": "NR-v0.8.6",
+    "archive": "dlss-unlocked-standalone-NR-v0.8.6.zip",
+    "url": "https://github.com/ShyVortex/dlss-unlocked/releases/download/NR-v0.8.6/dlss-unlocked-standalone-NR-v0.8.6.zip",
+    "sha256": "61e1111f266cf960668466f654174372e6d994e61b0042783dacd985f6ea02e3",
+    "release_size": 463446893,
+    "asset_id": null,
+    "verified_at": "2026-09-14",
+    "runtime_verified": false
+  }
+}

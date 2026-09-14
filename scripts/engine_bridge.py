@@ -1,0 +1,131 @@
+"""Serialized desktop adapter for the RC1.38-derived transaction engine."""
+from pathlib import Path
+import importlib.util,sys,json,hashlib,zipfile,os
+import transactions as t,packages,ui
+from storage import storage
+ROOT=Path(__file__).resolve().parents[1]
+def providers():return json.loads((ROOT/'providers/lock.json').read_text())
+def module(config,provider='y4my'):
+    name='rtxengine_desktop';spec=importlib.util.spec_from_file_location(name,ROOT/'engine/rtxengine.py')
+    e=importlib.util.module_from_spec(spec);sys.modules[name]=e;spec.loader.exec_module(e)
+    e.Y4MY_PROVIDER=providers()[provider]
+    # Retain terminal edition's namespace so its original backups remain authoritative.
+    e.STATE_ROOT=Path(os.environ.get('RTXFORGE_DLSS_UNLOCKED_STATE',str(Path.home()/'.local/state/rtxforge-dlss-unlocked')))
+    e.Y4MY_CACHE_DIR=storage(config)/'packages'/e.Y4MY_PROVIDER['sha256']
+    e.USE_COLOR=False
+    return e
+
+def payload(e,config,mode,archive=None):
+    p=e.Y4MY_PROVIDER;cache=storage(config,2*1024**3)/'packages'/p['sha256']
+    archive=Path(archive) if archive else packages.download(p['url'],cache/p['archive'],expected=p['sha256'],size=p['release_size'])
+    t.need(not archive.is_symlink() and t.digest(archive)==p['sha256'],'Provider archive hash mismatch')
+    if p['id']=='y4my':data,meta=getattr(e,'original_archive_loader',e.load_archive_payload)(archive)
+    else:
+        names=packages.entries(archive)
+        with zipfile.ZipFile(archive) as z:data={n:z.read(n) for n in names}
+        t.need('dxgi.dll' in data and 'OptiScaler.ini' in data and 'OptiScaler/streamline/sl.interposer.dll' in data,'Unsupported DLSS-Unlocked package layout')
+        t.need(hashlib.sha256(archive.read_bytes()).hexdigest()==p['sha256'],'Provider changed during extraction')
+        meta={**p,'name':p['archive'],'path':str(archive),'provider':p['name']}
+    # Alternate frame-generation backends are not installed or silently enabled.
+    forbidden={'dlss-enabler-headless.dll','dlssg_to_fsr3_amd_is_better.dll'}
+    data={n:v for n,v in data.items() if Path(n).name.lower() not in forbidden and '/dlssg_sm86/' not in n.lower()}
+    if mode=='mfg-only':data={n:v for n,v in data.items() if Path(n).name.lower() not in {'nvngx_dlssnr.dll','nvngx.dll_dlssnr.dll','sl.dlss_nr.dll'}}
+    # Root native runtime replacement would affect ordinary DLSS/2x after uninstall.
+    t.need(not any('/' not in n and (n.lower() in {'nvngx_dlss.dll','nvngx_dlssd.dll','nvngx_dlssg.dll','nvapi64.dll'} or n.lower().startswith('sl.')) for n in data),'Provider contains native root runtime replacements; refusing')
+    return data,meta
+
+def game(e,row):
+    root=Path(row['game']);exe=root/row['exe'];g=e.Game('',row['name'],root,row.get('source','Folder'),appid=row.get('appid'),exe=exe,target_dir=exe.parent)
+    g=e.inspect_game(g)
+    t.need(g.exe==exe,'Executable selection changed; refresh the library')
+    return g
+
+def fingerprint(e,g):
+    # Snapshot only installer inputs, not the whole game or saves.
+    target=g.target_dir;result={}
+    for p in target.iterdir():
+        if p.name.lower() in set(e.PROXY_NAMES)|{'optiscaler.ini','nvngx_dlssnr.dll'} or p==g.exe:
+            t.need(not p.is_symlink(),'Linked installer input refused: '+str(p))
+            if p.is_file():result[p.name]=e.sha256_file(p)
+    opti=target/'OptiScaler'
+    if opti.exists():result['OptiScaler/']=e._tree_manifest_data(opti)
+    bp=e.baseline_path(target)
+    result['baseline']=e.sha256_file(bp) if bp.is_file() else None
+    return result
+
+def desktop_mode(e):
+    """Keep interactive/elevated terminal operations out of desktop workers."""
+    def refuse(*args,**kwargs):
+        raise e.Stop('This operation needs terminal interaction; use RTXForge --cli to resolve it.')
+    e.ask=e.confirm=refuse
+    def steam_closed(*args,**kwargs):
+        if e.steam_running():raise e.Stop('Close Steam before applying changes.')
+        return True
+    e.ensure_steam_stopped_for_write=steam_closed
+    original=e.subprocess
+    class DesktopProcesses:
+        def __getattr__(self,name):return getattr(original,name)
+        def run(self,args,*a,**kw):
+            if args and Path(args[0]).name=='sudo':refuse()
+            return original.run(args,*a,**kw)
+        def check_output(self,args,*a,**kw):
+            if args and Path(args[0]).name=='sudo':refuse()
+            return original.check_output(args,*a,**kw)
+    e.subprocess=DesktopProcesses()
+
+def prepare(config,rows,mode,operation,settings):
+    e=module(config,settings.get('runtime_provider','y4my'));data={};meta={};nr=None;nrmeta=None
+    if operation!='uninstall':
+        data,meta=ui.work('Verifying '+e.Y4MY_PROVIDER['name'],payload,e,config,mode)
+        if mode=='nr-mfg' and 'nvngx_dlssnr.dll' not in data:
+            # Local-only for y4my; missing per-game model is a per-target refusal.
+            nr,nrmeta=e.load_user_nr_runtime(settings.get('nr_runtime') or None,family=None)
+    desktop_mode(e)
+    ready=[];blocked=[];seen=[]
+    for row in rows:
+        try:
+            g=game(e,row)
+            t.need(not any(g.root.resolve().is_relative_to(p) or p.is_relative_to(g.root.resolve()) for p in seen),'Duplicate or overlapping game selection; refresh the library')
+            seen.append(g.root.resolve())
+            baseline=e.load_baseline(g.target_dir)
+            if baseline:
+                t.need(not any(v.get('kind') in ('tar_tree','tar_file') for v in baseline.get('originals',{}).values()),'Privileged backup requires terminal restore before desktop management')
+            if operation=='uninstall':
+                t.need(baseline,'No terminal-engine baseline; use legacy Undo for an older app install')
+                e.verify_baseline_integrity(g.target_dir,baseline,adopt_legacy=False)
+                e.verify_native_restore(baseline)
+                preview={'files':baseline['managed_paths'],'proxy':(baseline.get('current') or {}).get('proxy',''),'launch_options':'Restore only recorded proxy override; preserve NVIDIA capability flags'}
+            else:
+                t.need(not row.get('blocked'),row.get('blocked',''))
+                if baseline:
+                    old=(baseline.get('current') or {}).get('provider_id','y4my')
+                    t.need(old==e.Y4MY_PROVIDER['id'],'Uninstall the current provider before switching providers; its original backups must be restored first')
+                preview=e.install_target(g,data,meta,'ada',nr_runtime_payload=nr,nr_runtime_meta=nrmeta,feature_mode=mode,enable_effects=settings.get('enable_effects',False),dry_run=True)
+            ready.append({'game':g,'row':row,'preview':preview,'fingerprint':fingerprint(e,g)})
+        except (e.Stop,t.Refusal,OSError,ValueError) as ex:blocked.append({'name':row['name'],'reason':str(ex)})
+    return {'kind':'engine','operation':operation,'title':operation.title(),'rows':[{'name':p['row']['name'],'detail':f"{e.Y4MY_PROVIDER['name']} · {len(p['preview']['files'])} managed files · "+p['preview']['launch_options']} for p in ready],
+            'blocked':blocked,'plans':ready,'engine':e,'payload':data,'meta':meta,'nr':nr,'nrmeta':nrmeta,'mode':mode,'enable_effects':settings.get('enable_effects',False)}
+
+def execute(review):
+    e=review['engine'];results=[]
+    # Never kill Steam behind a GUI action, or wait invisibly for terminal prompts.
+    t.need(not e.steam_running(),'Close Steam before applying changes so launch settings can be saved safely.')
+    with e.mutation_lock():
+        for index,item in enumerate(review['plans'],1):
+            g=item['game'];ui.line(f'{index}/{len(review["plans"])}',g.name)
+            try:
+                t.need(fingerprint(e,g)==item['fingerprint'],'Game or baseline changed since preview; prepare again')
+                if review['operation']=='uninstall':
+                    e.verify_native_restore(e.load_baseline(g.target_dir))
+                    e.restore_launch_options_batch([g],assume_yes=True)
+                    record=e.restore_target(g)
+                else:
+                    record=e.install_target(g,review['payload'],review['meta'],'ada',nr_runtime_payload=review['nr'],nr_runtime_meta=review['nrmeta'],feature_mode=review['mode'],enable_effects=review['enable_effects'])
+                    synced=e.sync_launch_options_batch([g],assume_yes=True,prompt=False)
+                    t.need(synced and all(r.get('status')=='written' for r in synced),'Files installed, but launch settings need attention: '+str(synced or record['launch_options']))
+                results.append({'name':g.name,'status':'complete','record':record})
+            except Exception as ex:results.append({'name':g.name,'status':'failed','error':str(ex)})
+    path=e.STATE_ROOT/('desktop-'+e.now_stamp()+'.json');e.save_json_atomic(path,{'results':results})
+    failures=sum(r['status']=='failed' for r in results)
+    if failures:raise t.Refusal(f'{failures} game(s) need attention. Completed games retain backups. Report: {path}')
+    return str(path)

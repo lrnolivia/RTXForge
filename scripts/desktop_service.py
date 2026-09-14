@@ -2,7 +2,7 @@
 from pathlib import Path
 import rtxforge as app
 import discovery,planning,packages,profiles,cleanup,transactions as t
-import re,datetime,hardware
+import re,datetime,hardware,engine_bridge,library_media
 from storage import storage
 
 class DesktopService:
@@ -20,6 +20,7 @@ class DesktopService:
             p=Path(path).resolve()
             g=discovery.inspect_game(discovery.Game('',p.name,str(p),'Folder'))
             if g.exe:found.append(g)
+        engine=engine_bridge.module(self.config)
         rows=[];seen=set()
         for g in found:
             root=Path(g.root).resolve()
@@ -40,6 +41,15 @@ class DesktopService:
             row={'name':g.name,'game':str(root),'exe':exe,'source':g.type,'blocked':reason,'appid':g.appid,
                  'library':str(library or root.parent),'installed':installed,'mfg_route':mfg_route,
                  'profile':('NR + MFG' if ini.get('DlssNr',{}).get('Enabled','false').lower()=='true' else 'MFG Only') if installed else 'Not installed'}
+            if installed:
+                try:
+                    baseline=engine.load_baseline(config.parent)
+                    current=(baseline or {}).get('current') or {}
+                    if current.get('feature_mode'):
+                        row['profile']='NR + MFG' if current['feature_mode']=='nr-mfg' else 'MFG Only'
+                        row['runtime_provider']=current.get('provider_id','y4my')
+                        row['effects_enabled']=ini.get('DLSSG',{}).get('AdaMfgUnlock','false').lower()=='true'
+                except (engine.Stop,OSError,ValueError):pass
             if g.manifest:
                 try:
                     text=Path(g.manifest).read_text()
@@ -65,22 +75,7 @@ class DesktopService:
         if operation!='uninstall':
             host=self.hardware()
             if not host['ready']:return {'kind':'batch','operation':operation,'title':operation.title(),'plans':[],'rows':[],'blocked':[{'name':'Hardware check','reason':host['reason']}]}
-        blocked=[{'name':r['name'],'reason':r.get('blocked') or 'No executable found'} for r in rows if not r.get('exe') or (operation!='uninstall' and r.get('blocked'))]
-        eligible=[r for r in rows if r.get('exe') and (operation=='uninstall' or not r.get('blocked'))]
-        if not eligible:return {'kind':'batch','operation':operation,'title':operation.title(),'plans':[],'blocked':blocked,'rows':[]}
-        targets=app.normalize_targets([{**r,'mode':mode} for r in eligible]);state=storage(self.config)
-        sources={} if operation=='uninstall' else ui.work('Preparing and verifying '+profiles.MODES[mode],packages.prepare,self.config,mode)
-        ready=[]
-        for index,row in enumerate(targets,1):
-            try:
-                label=f'Checking {index}/{len(targets)} · '+row.get('name',Path(row['game']).name)
-                plan=ui.work(label,planning.remove,row,state) if operation=='uninstall' else ui.work(label,planning.make,row,state,sources,operation,adopt)
-                if plan['conflicts']:blocked.append({'name':row['name'],'reason':friendly('\n'.join(plan['conflicts']))})
-                elif plan['changes']:ready.append(plan)
-                else:blocked.append({'name':row['name'],'reason':'Already up to date — no changes needed'})
-            except (t.Refusal,OSError,ValueError) as ex:blocked.append({'name':row['name'],'reason':friendly(str(ex))})
-        return {'kind':'batch','title':{'install':'Install / update','repair':'Repair','uninstall':'Uninstall OptiScaler'}[operation],
-                'operation':operation,'plans':ready,'blocked':blocked,'rows':[{'name':Path(p['game']).name,'detail':f"{len(p['changes'])} file changes · {profiles.MODES[p['mode']]} · {p.get('mfg_route_label','Native Streamline DLSS-G')}"+(' · adopting external OptiScaler' if p.get('adopted') else '')+(f" · Proton override: {Path(p['proxy']).stem}=n,b" if p.get('proxy') else '')} for p in ready]}
+        return engine_bridge.prepare(self.config,rows,mode,operation,library_media.load_settings(self.config))
 
     def recoveries(self):
         root=storage(self.config);rows=[]
@@ -113,6 +108,7 @@ class DesktopService:
     def execute(self,review):
         # The desktop must pass the exact in-memory review shown to the user.
         kind=review['kind']
+        if kind=='engine':return engine_bridge.execute(review)
         if kind=='batch':return str(app.apply_batch(self.config,review['plans']))
         if kind=='cleanup':return str(cleanup.apply(self.config,review['items']))
         if kind=='restore-cleanup':cleanup.restore(self.config,Path(review['path']),True);return review['path']

@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'scripts'))
 import gi
 gi.require_version('Gtk','4.0');gi.require_version('Adw','1')
 from gi.repository import Gtk,Adw,GLib,Gio,Gdk,Graphene,Pango,GdkPixbuf
-import ui,library_media,os
+import ui,library_media,os,game_notes
 from desktop_service import DesktopService
 
 ACCENT_PROVIDERS={}
@@ -139,7 +139,7 @@ class Window(Adw.ApplicationWindow):
         self.mfg=Gtk.ToggleButton(label='MFG Only');self.nr=Gtk.ToggleButton(label='NR + MFG');self.nr.set_group(self.mfg)
         for toggle,mode in ((self.nr,'nr-mfg'),(self.mfg,'mfg-only')):
             toggle.add_css_class('profile-nr' if mode=='nr-mfg' else 'profile-mfg');toggle.add_css_class('profile-toggle');toggle.connect('toggled',self.profile_changed,mode);linked.append(toggle)
-        (self.nr if self.settings.get('default_profile')=='nr-mfg' else self.mfg).set_active(True);self.profile_note=label('Native Streamline MFG · no NR panel','dim-label');controls.append(self.profile_note)
+        (self.nr if self.settings.get('default_profile')=='nr-mfg' else self.mfg).set_active(True);self.profile_note=label('Game-native frame generation · NR not installed','dim-label');controls.append(self.profile_note)
         viewbar=Gtk.Box(spacing=10);library_title=label('Your games','heading');library_title.set_hexpand(True);viewbar.append(library_title)
         viewbox=Gtk.Box();viewbox.add_css_class('linked');viewbar.append(viewbox);self.view_buttons={};first=None
         for title,key in [('Posters','posters'),('Wide capsules','capsules'),('List','list')]:
@@ -194,7 +194,7 @@ class Window(Adw.ApplicationWindow):
     def profile_changed(self,toggle,mode):
         if toggle.get_active():
             self.mode=mode
-            if hasattr(self,'profile_note'):self.profile_note.set_text('NR starts enabled · Native Streamline MFG default' if mode=='nr-mfg' else 'Native Streamline MFG · no NR panel')
+            if hasattr(self,'profile_note'):self.profile_note.set_text('NR + native MFG · startup activation in Settings' if mode=='nr-mfg' else 'Game-native frame generation · NR not installed')
     def filter_changed(self,toggle,key):
         if toggle.get_active():self.filter=key;self.filter_games()
     def close_request(self,*_):
@@ -271,6 +271,7 @@ class Window(Adw.ApplicationWindow):
         clear(self.flow);self.games=games;self.cards={}
         view=self.settings.get('library_view','posters');self.flow.set_max_children_per_line(1 if view=='list' else 8);self.flow.set_homogeneous(view!='list')
         for game in games:
+            game['test_record']=game_notes.load(self.service.config,game['game']) if not self.options.demo else game.get('test_record',{'status':'Untested','notes':''})
             self.make_card(game)
             if game['game'] in selected:self.cards[game['game']]['check'].set_active(True)
         count=sum(g.get('installed',False) for g in games);libs=len(set(g.get('library','') for g in games))
@@ -309,7 +310,7 @@ class Window(Adw.ApplicationWindow):
             except Exception:entry['fallback'].set_visible(True)
         else:
             entry['picture'].set_paintable(None);entry['fallback'].set_visible(True)
-        entry['meta'].set_text((game.get('mfg_route') or 'MFG configuration detected') if game.get('installed') else game.get('source',''))
+        entry['meta'].set_text(game.get('source','')+' · '+game.get('test_record',{}).get('status','Untested'))
         entry['widget'].set_tooltip_text(game['name']+'\n'+(game.get('art_credit') or 'Artwork pending'))
     def filter_games(self):
         if not hasattr(self,'search'):return
@@ -371,10 +372,31 @@ class Window(Adw.ApplicationWindow):
             description=label(game['description']);margins(description,20);b.append(description)
         info=Adw.PreferencesGroup();margins(info,20);b.append(info)
         technical=Adw.ExpanderRow(title='Installation details',subtitle='Location, compatibility and storage');info.add(technical)
-        values=[('Compatibility',game.get('blocked') or 'Native DLSS-G detected; runtime not verified'),('MFG route',game.get('mfg_route')),('Library',game.get('library')),('Folder',game['game'])]
+        values=[('Compatibility',game.get('blocked') or 'Native DLSS-G detected; runtime not verified'),('Library',game.get('library')),('Folder',game['game'])]
         if game.get('size_bytes'):values.append(('Installed size',f"{game['size_bytes']/1024**3:.1f} GiB"))
         for name,value in values:
             if value:technical.add_row(row(name,value))
+        testing=Adw.PreferencesGroup(title='Your test record',description='Your observations stay local. Bench excludes this game from bulk install and repair.');margins(testing,20);b.append(testing)
+        record=game.get('test_record',{'status':'Untested','notes':''});choice={'status':record.get('status','Untested')}
+        switches=Gtk.Box(spacing=0);switches.add_css_class('linked');first=None
+        for value in game_notes.STATES:
+            toggle=Gtk.ToggleButton(label=value)
+            if first:toggle.set_group(first)
+            else:first=toggle
+            toggle.set_active(value==choice['status']);toggle.connect('toggled',lambda w,v=value:choice.update(status=v) if w.get_active() else None);switches.append(toggle)
+        state_row=row('Result','Recorded by you; installation is not proof of success.');state_row.add_suffix(switches);testing.add(state_row)
+        notes=Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR,height_request=85);notes.get_buffer().set_text(record.get('notes',''));notes.set_margin_start(20);notes.set_margin_end(20);b.append(notes)
+        actions=Gtk.Box(spacing=8);margins(actions,20);b.append(actions)
+        def save_notes(*_):
+            buf=notes.get_buffer();current=game_notes.load(self.service.config,game['game']) if not self.options.demo else record.copy()
+            current.update(status=choice['status'],notes=buf.get_text(buf.get_start_iter(),buf.get_end_iter(),True))
+            if not self.options.demo:game_notes.save(self.service.config,game['game'],current)
+            game['test_record']=current;self.paint_card(self.cards[game['game']]);self.toast('Test notes saved')
+        actions.append(button('Save notes',save_notes,'suggested-action'))
+        active=bool(record.get('active'))
+        test_button=button('Finish test · collect logs' if active else 'Start test',lambda *_:self.record_test(game,active));test_button.set_sensitive(not self.options.demo);actions.append(test_button)
+        if active:testing.add(row('Test in progress',record['active']['started']+' · finish after closing the game'))
+        elif record.get('sessions'):testing.add(row('Last test',record['sessions'][-1]['finished']))
         credit=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);margins(credit,12);popover=Gtk.Popover();popover.set_child(credit);credits=Gtk.MenuButton(label='Artwork credits',halign=Gtk.Align.START);credits.add_css_class('pill');credits.set_margin_start(20);credits.set_popover(popover);b.append(credits)
         if game.get('art_credit'):credit.append(label(game['art_credit'],'game-caption'))
         if game.get('art_link'):credit.append(Gtk.LinkButton(uri=game['art_link'],label='Poster'))
@@ -388,16 +410,33 @@ class Window(Adw.ApplicationWindow):
             if operation=='uninstall':action.add_css_class('bulk-remove')
             action.set_sensitive((operation=='uninstall' and game.get('installed',False)) or (operation!='uninstall' and not game.get('blocked') and bool(self.hardware_info and self.hardware_info['ready'])))
             f.append(action)
+    def record_test(self,game,finish=False):
+        def done(record):
+            game['test_record']=record;self.details(game)
+            if not finish and game.get('source')=='Steam' and str(game.get('appid','')).isdigit():
+                Gio.AppInfo.launch_default_for_uri('steam://rungameid/'+str(game['appid']),None)
+            self.toast('Logs captured. Record your result and save notes.' if finish else 'Test started. Launch your game normally, then return here to finish.')
+        self.start('Collecting test logs' if finish else 'Starting test record',lambda:(game_notes.finish if finish else game_notes.start)(self.service.config,game),done)
+    def show_reports(self,*_):
+        d,b,f=self.open_panel('Library status & reports')
+        totals=Counter(g.get('test_record',{}).get('status','Untested') for g in self.games)
+        b.append(label(' · '.join(f'{totals[state]} {state.lower()}' for state in game_notes.STATES),'heading'))
+        b.append(label('Export includes your notes, game paths, package identity and captured logs. Review the ZIP before sharing. Nothing is uploaded.','dim-label'))
+        for game in self.games:
+            record=game.get('test_record',{});item=row(game['name'],record.get('status','Untested')+(' · test in progress' if record.get('active') else ''))
+            item.add_suffix(button('Open',lambda _,g=game:self.details(g)));b.append(item)
+        export=button('Export support ZIP',lambda *_:self.start('Exporting report',lambda:game_notes.export(self.service.config,self.games),lambda p:(self.toast('Saved '+str(p)),Gio.AppInfo.launch_default_for_uri(p.parent.as_uri(),None))),'forge-primary');export.set_sensitive(not self.options.demo);f.append(export)
     def launch_action(self,operation,entire=False,targets=None):
         if self.busy and self.task_kind!='art':return
         rows=targets if targets is not None else list(self.games) if entire else [e['data'] for e in self.cards.values() if e['check'].get_active()]
-        if not rows:self.toast('Select games first.');return
+        if entire and operation!='uninstall':rows=[g for g in rows if g.get('test_record',{}).get('status')!='Bench']
+        if not rows:self.toast('No eligible games selected.');return
         title={'install':'Install','repair':'Repair','uninstall':'Uninstall'}[operation]+(' entire library' if entire else ' selected games')
         d,b,f=self.open_panel(title);d.set_can_close(False)
         orb=Gtk.Box(halign=Gtk.Align.CENTER);orb.add_css_class('progress-orb');orb.append(Gtk.Image.new_from_icon_name('applications-games-symbolic'));b.append(orb)
         self.job_label=label(f'Preparing {len(rows)} games','progress-title');b.append(self.job_label)
         b.append(label('Your games and saves stay installed. Only identified OptiScaler components are removed.' if operation=='uninstall' else f"Profile: {'NR + MFG' if self.mode=='nr-mfg' else 'MFG Only'}. Backups are created before file changes."))
-        if operation!='uninstall':b.append(label('Changing packages or deployment methods? Fully uninstall the previous setup first, then install the new one.','dim-label'))
+        if operation!='uninstall':b.append(label('Provider: '+self.settings.get('runtime_provider','y4my')+' · '+('effects enabled at startup' if self.settings.get('enable_effects') else 'effects dormant at startup')+'. Close Steam before applying. Uninstall before switching providers.','dim-label'))
         spin=Gtk.Spinner(spinning=True,halign=Gtk.Align.CENTER,width_request=34,height_request=34);b.append(spin)
         pulse=Gtk.ProgressBar();b.append(pulse)
         def animate():
@@ -428,7 +467,7 @@ class Window(Adw.ApplicationWindow):
         self.start('Applying changes',lambda:self.service.execute(review),lambda path:self.completed(path,d,b,f))
     def completed(self,path,d,b,f):
         self.job_label=None;d.set_can_close(True);clear(b);clear(f)
-        b.append(label('Done.','hero-title'));b.append(label('Your changes are complete. Backups are available under Undo previous changes in Settings.'))
+        b.append(label('Done.','hero-title'));b.append(label('Your changes are complete. Use Uninstall to restore this engine’s baseline. Undo previous changes in Settings handles older desktop installs.'))
         record=label(str(path),'dim-label');record.set_selectable(True);b.append(record)
         f.append(button('Back to library',lambda *_:(d.close(),self.scan()),'forge-primary'))
     def show_activity(self,*_):
@@ -436,9 +475,20 @@ class Window(Adw.ApplicationWindow):
     def show_settings(self,*_):
         d,b,f=self.open_panel('Settings')
         if os.environ.get('APPIMAGE'):
-            b.append(label('Desktop app · 0.4.3','heading'))
+            b.append(label('Desktop app · 0.5.0','heading'))
             b.append(button('Install / update this build',self.install_desktop,'forge-primary'))
             b.append(label('Keep this build in your app menu. Repeating this with a new AppImage updates it; your games and backups stay separate.','dim-label'))
+        source_group=Adw.PreferencesGroup(title='Graphics provider',description='Exact versions are pinned. Uninstall before changing providers. Updates arrive with new app builds.');b.append(source_group)
+        provider_choice={'value':self.settings.get('runtime_provider','y4my')};providers=Gtk.Box(spacing=0);providers.add_css_class('linked');first=None
+        for key,title in [('y4my','y4my Multipass'),('dlss-unlocked','DLSS-Unlocked')]:
+            toggle=Gtk.ToggleButton(label=title)
+            if first:toggle.set_group(first)
+            else:first=toggle
+            toggle.set_active(provider_choice['value']==key);toggle.connect('toggled',lambda w,k=key:provider_choice.update(value=k) if w.get_active() else None);providers.append(toggle)
+        provider_row=row('Installer source','Each provider keeps its own runtime and NR configuration.');provider_row.add_suffix(providers);source_group.add(provider_row)
+        for pin in __import__('engine_bridge').providers().values():source_group.add(row(pin['name'],pin['tag']+' · '+pin['commit'][:12]))
+        effects=Adw.SwitchRow(title='Enable effects at startup',subtitle='Off installs a dormant setup for launch diagnosis. On enables Ada MFG and NR when selected.',active=self.settings.get('enable_effects',False));source_group.add(effects)
+        nr_path=Adw.EntryRow(title='Local NR DLL for y4my');nr_path.set_text(self.settings.get('nr_runtime',''));source_group.add(nr_path)
         appearance=Adw.PreferencesGroup(title='Library appearance');b.append(appearance)
         view_group=Gtk.Box(spacing=0);view_group.add_css_class('linked');view_choice={'value':self.settings.get('library_view','posters')};first=None
         for title,key in [('Posters','posters'),('Wide capsules','capsules'),('List','list')]:
@@ -469,15 +519,16 @@ class Window(Adw.ApplicationWindow):
         for title,key in [('Graphics card','gpu'),('Driver','driver'),('Video memory','vram'),('Processor','cpu'),('System','architecture')]:
             if host.get(key):system.add(row(title,host[key]))
         system.add(row('Hardware check',host.get('reason','Not checked')))
-        future=Adw.PreferencesGroup(title='OptiScaler source · coming later',description='UI preview only. RTXForge currently uses its verified bundled source.');b.append(future)
-        future.add(row('Current source',self.service.config['repo']))
+        future=Adw.PreferencesGroup(title='Custom repositories · coming later',description='Select a supported provider above. Arbitrary repositories are not enabled.');b.append(future)
+        future.add(row('Supported sources','y4my Multipass / DLSS-Unlocked · pinned releases'))
         repo=Adw.EntryRow(title='Custom OptiScaler repository');repo.set_text('https://github.com/owner/repository');repo.set_sensitive(False);future.add(repo)
         detect=button('Understand repository · coming later',lambda *_:None);detect.set_sensitive(False);b.append(detect)
+        b.append(button('Library status & reports',self.show_reports))
         maintenance=Adw.PreferencesGroup(title='Undo and removal tools');b.append(maintenance)
         undo=row('Undo previous changes','Restore a recorded install, uninstall or cleanup.');undo.add_suffix(button('Browse',lambda *_:self.show_undo()));maintenance.add(undo)
         old=row('Remove old NR files','Global DLSS5 cleanup with recovery copies.');old.add_suffix(button('Review',lambda *_:self.show_cleanup()));maintenance.add(old)
         def save(*_):
-            self.settings.update({'library_view':view_choice['value'],'art_scale':int(scale.get_value()),'cache_days':cache.get_value_as_int(),'network_timeout':timeout.get_value_as_int(),'default_profile':'nr-mfg' if default_nr.get_active() else 'mfg-only','dark':dark.get_active(),'online_art':art.get_active(),'steam_metadata':metadata.get_active(),'recognize_previous':adopt.get_active()})
+            self.settings.update({'runtime_provider':provider_choice['value'],'enable_effects':effects.get_active(),'nr_runtime':nr_path.get_text().strip(),'library_view':view_choice['value'],'art_scale':int(scale.get_value()),'cache_days':cache.get_value_as_int(),'network_timeout':timeout.get_value_as_int(),'default_profile':'nr-mfg' if default_nr.get_active() else 'mfg-only','dark':dark.get_active(),'online_art':art.get_active(),'steam_metadata':metadata.get_active(),'recognize_previous':adopt.get_active()})
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK if self.settings['dark'] else Adw.ColorScheme.DEFAULT)
             self.view_buttons[self.settings['library_view']].set_active(True)
             if self.options.demo:d.close();self.show_games(self.games,False);return

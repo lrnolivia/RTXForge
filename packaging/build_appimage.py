@@ -2,16 +2,17 @@
 """Build the Bazzite 44 GNOME-targeted AppImage; does not install OS packages."""
 from pathlib import Path
 import hashlib,json,shutil,subprocess,urllib.request
-root=Path(__file__).resolve().parents[1];dist=root/'dist';version='0.4.3'
+root=Path(__file__).resolve().parents[1];dist=root/'dist';version='0.5.0'
 stage=dist/'AppImage-build';stage.mkdir(exist_ok=True)
 app=stage/'RTXForge.AppDir'
 if app.exists():shutil.rmtree(app)
 app.mkdir();payload=app/'usr/share/rtxforge';payload.mkdir(parents=True)
-for name in ['gui','scripts']:
+for name in ['gui','scripts','providers']:
  shutil.copytree(root/name,payload/name,ignore=shutil.ignore_patterns('__pycache__'))
 for name in ['provider.json','README.md']:shutil.copyfile(root/name,payload/name)
-shutil.copytree(root/'dist/panel-loader',payload/'bundled-loader')
-c=json.loads((root/'provider.json').read_text());assert hashlib.sha256((payload/'bundled-loader/OptiScaler.dll').read_bytes()).hexdigest()==c['bundled_loader_sha256']
+(payload/'engine').mkdir()
+shutil.copyfile(root/'engine/rtxengine.py',payload/'engine/rtxengine.py')
+# Provider archives are verified at preparation; no stale custom loader is bundled.
 shutil.copyfile(root/'packaging/AppRun',app/'AppRun');(app/'AppRun').chmod(0o755)
 icon='io.github.lrnolivia.RTXForge'
 shutil.copyfile(root/f'gui/icons/hicolor/scalable/apps/{icon}.svg',app/f'{icon}.svg')

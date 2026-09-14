@@ -13,10 +13,10 @@ def detect():
     try:
         result=subprocess.run(['nvidia-smi','--query-gpu=name,driver_version,memory.total','--format=csv,noheader,nounits'],text=True,capture_output=True,timeout=10,check=True)
         rows=[line.split(',') for line in result.stdout.strip().splitlines() if line.count(',')>=2]
-        supported=[r for r in rows if re.search(r'RTX\s+(?:40|50)\d{2}',r[0])]
+        supported=[r for r in rows if re.search(r'RTX\s+40\d{2}',r[0])]
         chosen=(supported or rows)[0]
         info.update({'gpu':chosen[0].strip(),'driver':chosen[1].strip(),'vram':chosen[2].strip()+' MiB'})
-        if not supported:info['reason']='This native NVIDIA package targets GeForce RTX 40/50-series GPUs. This GPU is not validated.';return info
+        if not supported:info['reason']='This native NVIDIA package targets GeForce RTX 40-series GPUs. This GPU is not validated.';return info
     except (OSError,subprocess.SubprocessError,IndexError):
         info['reason']='Cannot verify an NVIDIA GPU and working NVIDIA driver. Install/repair is unavailable; uninstall remains available.';return info
     if not (shutil.which('7zz') or shutil.which('7z')):info['reason']='7-Zip is required to prepare OptiScaler packages.';return info

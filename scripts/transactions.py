@@ -201,6 +201,9 @@ def _rollback_transaction(state, apply=False):
         backup = safe(state / 'backups' / str(i))
         if r['before'] is not None:
             need(backup.is_file() and digest(backup) == r['before'], 'Backup damaged/missing: ' + r['path'])
+        parts=P(r['path'].lower()).parts
+        native=parts[-1] in {'nvngx_dlss.dll','nvngx_dlssd.dll','nvngx_dlssg.dll','nvapi64.dll'} or parts[-1].startswith('sl.')
+        need(not (native and 'optiscaler' not in parts and r['before'] is None and current is not None), 'Refusing to remove native NVIDIA/Streamline file without an original backup: '+r['path'])
         if current != r['before'] or (r['before'] is not None and stat.S_IMODE(p.stat().st_mode) != record['modes'][r['path']]):
             actions.append((r, p, backup, current))
     if not apply:

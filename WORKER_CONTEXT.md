@@ -1,738 +1,281 @@
-# RTXForge Worker Context
+# rtxForge Worker Context
 
-**Canonical development source of truth — refreshed 2026-09-10**
+**Canonical living source of truth for the rtxForge production project**
 
-Read this file completely before changing RTXForge or RTXForge-MFG. It replaces the old overlapping `rtxforgenotes.md`, `update.md`, and temporary Astra handoff as the single worker-facing context document.
+Read this file completely before changing the project.
 
----
+Then read `NOTES.md`.
 
-## 1. Repositories and source of truth
-
-Use the normal local repositories:
-
-```text
-~/Repos/RTXForge
-~/Repos/RTXForge-MFG
-```
-
-The temporary `-online` clones were used to refresh these repos and then deleted.
-
-### RTXForge
-
-```text
-Repository: lrnolivia/RTXForge
-Branch: main
-```
-
-Important app-repo integration commits before this context refresh:
-
-```text
-ffb098b  Pin working NativeMfgMenu v3e runtime
-70e6d78  Preserve known Forza game-side winmm proxy
-```
-
-Do not assume those are still HEAD. At worker startup, fetch and inspect the current branch before editing.
-
-### RTXForge-MFG
-
-```text
-Repository: lrnolivia/RTXForge-MFG
-Branch: rtxforge-proton
-Known-working v3e commit:
-deca7b7a8f1953de3cf6fe2731ede440b3ddaadf
-
-Golden tag:
-RTXForge-NativeMFG-v3e-working
-
-Commit message:
-RTXForge.NativeMfgMenu.v3e: apply native count in DLSSG dispatcher
-```
-
-Pinned upstream OptiScaler base:
-
-```text
-7b7220bbb4994a9c8ae60cfc75a44cb67995efb8
-```
-
-Important earlier checkpoints:
-
-```text
-v3d diagnostic:
-91004fa12354f892034255a1357dfdf33424f3c3
-
-v3c failed apply:
-b276b5e434c6094962779bd0a77c5adb67642a7a
-
-v3b diagnostic:
-174610ec8e1110601383b47c2d90d7c8c4b5ad56
-```
-
-### Golden local v3e checkpoint
-
-A known-working runtime copy was preserved at:
-
-```text
-~/RTXForge-Golden-v3e
-```
-
-Recorded identity:
-
-```text
-Commit:
-deca7b7a8f1953de3cf6fe2731ede440b3ddaadf
-
-Runtime DLL SHA256:
-95580ebc7d2f562d6d99cd798587f757a51cd7bd52e24b0895c42414c3a3c2e8
-
-GitHub Actions build:
-34455052784
-
-Game:
-The Outer Worlds 2
-
-GPU:
-RTX 4070
-```
-
-Observed working status:
-
-- native 2X works
-- native 3X works
-- native 4X works
-- repeated 2X -> 3X -> 4X transitions work
-- no fatal in the successful run
-- no DLSS-G SetOptions error in the successful run
-- Off/Auto/Dynamic are not fully implemented yet
-- `runtime_verified=false`
-
-Do not destroy or repoint the golden tag while active runtime work continues.
+Do not create another worker handoff unless the user explicitly asks for one.
 
 ---
 
-## 2. Product scope
+# 0. Documentation model
 
-RTXForge is a **Linux/Bazzite/Proton application** distributed as an AppImage.
+The active rtxForge documentation model is intentionally small:
 
-Current direction:
+```text
+WORKER_CONTEXT.md = current project brain
+NOTES.md          = user-editable scratchpad / inbox
+Git history       = archaeology
+issues / PRs      = task-specific history when used
+```
+
+`WORKER_CONTEXT.md` is not an archive.
+
+Every worker that materially changes the project must leave this file more accurate and less stale than it found it.
+
+At startup:
+
+```text
+read WORKER_CONTEXT.md
+read NOTES.md
+inspect actual repositories
+inspect actual manifests/runtime selection
+correct stale assumptions before acting
+continue the highest-priority unfinished work
+```
+
+At closeout:
+
+```text
+update current state
+remove completed active tasks
+rewrite superseded architecture statements
+fold durable discoveries into the right section
+process NOTES.md
+delete duplicate/stale guidance
+do not append another handoff document
+```
+
+Use Git history for old detail.
+
+Do not preserve completed work as active instructions merely because it used to matter.
+
+---
+
+# 1. Canonical architecture
+Lauren's 2026-09-14 instruction supersedes DEC-20260911-001's one-provider restriction. Users choose y4my Multipass or DLSS-Unlocked. Each is a complete provider, never a mixture of one provider's loader with the other's NR layer. One transaction engine serves the GUI and terminal frontend.
+
+`providers/lock.json` pins current default branches and release artifacts, verified against GitHub on 2026-09-14:
+- y4my `dlss-neural-rendering`: `7b7220bbb4994a9c8ae60cfc75a44cb67995efb8`, v4 with_DLSS archive SHA `9d7824cc9cfb15265bc6438b4638aad74ff9cd6d1d3488ab73724affb386a8b0`.
+- DLSS-Unlocked `main`: `00fbc5873363cd0a2e93867b365506e90732687f`, NR-v0.8.6 standalone SHA `61e1111f266cf960668466f654174372e6d994e61b0042783dacd985f6ea02e3`.
+
+The GUI uses `scripts/engine_bridge.py` over `engine/rtxengine.py`, derived from the supplied RC1.38 typed-baseline package. `rtxforge` now enters the same engine via `scripts/engine_cli.py`. Legacy app transaction helpers remain for Undo of old app records.
+
+Keep NVIDIA Ada frame generation native. Do not select OptiScaler DLSS-G replacement input/output for the default native-game path. RC1.38 used Enabled=false with FGInput/FGOutput=dlssg, but upstream initializes active routes independently and creates the private Streamline output at D3D12 device creation. Corrected policy is FGInput=nofg, FGOutput=nofg, Enabled=false: this leaves game-native DLSS-G intact. AdaMfgUnlock and AdaBlackwellKernels are independently enabled by the explicit startup-effects switch. This code correction is NOT cross-game launch proof.
+
+No root native DLSS/Streamline replacement, no alternate/hybrid FG payload, no automatic provider fallback. Upstream signature refusal remains unchanged. NR differs by provider: y4my dual-feature/DLSS enlargement with a local model; DLSS-Unlocked owns its pre-SR package. MFG Only omits NR. Startup effects are explicitly selectable and default dormant while launch failures remain unverified.
+
+---
+
+# 2. Current project/chat identity
+
+The rename is already complete.
+
+Current identity:
+
+```text
+Project: rtxForge
+Master chat: MASTER— rtxForge
+Primary worker chat: WORKER — rtxForge
+```
+
+Do not rename these again.
+
+Do not create duplicate rtxForge master/worker chats to redo an already-completed migration.
+
+`Ada Graphics` is historical naming only.
+
+---
+
+# 3. Runtime ownership
+One production owner and one transaction engine with two explicit providers. Historical Nightfall research remains reference. Do not create new worker tasks for the superseded split.
+
+---
+
+
+# 4. Historical runtime evidence
+v3e is retired as active architecture. Preserve its tag, commits, hashes and logs without repointing history. Its reported TOW2 2X/3X/4X wins become regression cases, including repeated transitions and absence of fatal/SetOptions errors. Prior Cyberpunk failures remain evidence, not a reason to keep two runtimes.
+Lauren deployed v3e across her library before this change and will perform game testing. This task does not launch or redeploy games.
+
+---
+
+
+# 5. Product scope
+
+rtxForge is a Linux/Bazzite/Proton application for making community RTX work coherent, safe, reversible, and practical.
+
+Core thesis:
+
+> **Make NVIDIA hardware on Linux do everything it reasonably can.**
+
+Product direction:
 
 ```text
 Linux / Bazzite / Proton
 GNOME first
-KDE integration may follow
+KDE may follow
+AppImage
 Windows client: not active
 ```
 
-Do not turn the current project into a Windows client or generic cross-platform injector while finishing this work.
+Do not turn rtxForge into:
+
+```text
+a Windows client
+a generic mod downloader
+an arbitrary injector manager
+```
+
+Windows tools may be studied as product or implementation references.
+
+The practical user goal matters:
+
+> **The user should be able to play games instead of becoming the graphics stack's full-time QA department.**
 
 ---
 
-## 3. Runtime stack direction
+# 6. Production repository/runtime discovery
 
-Keep MFG and NR separable internally.
+Repository names and branches may change during refactors.
 
-### MFG
+Do not trust stale paths from an old handoff.
 
-Preferred/default route:
+At startup, discover the actual current repos and inspect:
+
+```bash
+git fetch origin
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git remote -v
+git tag --points-at HEAD
+```
+
+Also inspect the active rtxForge provider/package manifests.
+
+Before editing, determine:
 
 ```text
-game-native Streamline DLSS-G
-        ↓
-RTXForge-MFG / y4my OptiScaler core
-        ↓
-OptiScaler-owned native NVIDIA DLSS-G output
-        ↓
-Ada MFG unlock
-        ↓
-Blackwell kernels
+which repo is the production app
+which code/package is the unified y4my production runtime
+which historical branches contain useful evidence
+which runtime is actually pinned/shipped
+which capability IDs/hashes are current
 ```
 
-Baseline:
+Repository/manifests reality wins over old prose.
 
-```ini
-[FrameGen]
-Enabled=true
-FGInput=dlssg
-FGOutput=dlssg
-FGNvngxReplacement=none
-
-[DLSSG]
-AdaMfgUnlock=true
-AdaBlackwellKernels=true
-```
-
-Rules:
-
-- Native Streamline DLSS-G is the preferred/default MFG route.
-- y4my remains the OptiScaler/MFG core.
-- Do not route normal MFG through `nvngxfg`.
-- Do not make DLSS Enabler / Artur Headless a hidden dependency or automatic fallback.
-- Cyberpunk 2077 remains a useful proof case: native Streamline reproduced normal performance; the Enabler route reproduced severe performance loss.
-- Preserve working MFG behavior while changing NR.
-
-### NR
-
-The current 0.4.x-era NR composition is incomplete.
-
-Current partial composition:
-
-```text
-y4my OptiScaler core
-+ y4my NR forwarder
-+ DLSS-Unlocked patched nvngx_dlssnr.dll
-```
-
-Target:
-
-```text
-DLSS-Unlocked complete Proton-working NR route
-+ y4my native Streamline MFG route left untouched
-```
-
-Do not treat copying the patched NR DLL alone as complete NR integration. Bring over the NR-specific Proton plumbing required by the chosen DLSS-Unlocked route as a unit: forwarder, runtime, file layout, proxy/loading behavior, config, required runtime/Streamline pieces, and Proton loading expectations.
-
-Do not wholesale import DLSS-Unlocked MFG defaults if they would restore Enabler/`nvngxfg` as the normal generator.
+If any of those mappings materially change, update this file.
 
 ---
 
-## 4. Native MFG breakthrough: what is proven
-
-### Test environment
-
-```text
-Game: The Outer Worlds 2
-Game directory:
-/var/mnt/Games/Non-Steam Games/The Outer Worlds 2/Arkansas/Binaries/Win64
-
-Live proxy:
-dxgi.dll
-
-Primary log:
-OptiScaler.log
-
-GPU:
-RTX 4070 / Ada
-
-Platform:
-Bazzite / Proton / D3D12
-```
-
-Successful test configuration:
-
-```ini
-FrameGen.Enabled=true
-FGInput=dlssg
-FGOutput=dlssg
-FGNvngxReplacement=none
-
-DLSSG.OverrideForceDMFG=false
-DLSSG.ForceDMFG=false
-DLSSG.AdaMfgUnlock=true
-DLSSG.AdaBlackwellKernels=true
-
-DlssNr.Enabled=false
-
-NvApi.DisableFlipMetering=true
-NvApi.DisableReflexSync=true
-```
-
-Keep NR disabled while finishing MFG behavior.
-
-### Proven native mapping
-
-The Outer Worlds 2 exposes its native 2X/3X/4X selector and v3e makes it control OptiScaler's actual DLSS-G generated-frame count:
-
-```text
-Native 2X -> native numFramesToGenerate=1 -> output count=1
-Native 3X -> native numFramesToGenerate=2 -> output count=2
-Native 4X -> native numFramesToGenerate=3 -> output count=3
-```
-
-The successful session exercised:
-
-```text
-1 -> 2 -> 3
-3 -> 1
-1 -> 2
-2 -> 3
-```
-
-This is the first confirmed working native-menu control path.
-
-Important: this is not yet full production verification. Keep:
-
-```text
-runtime_verified=false
-```
-
-until remaining mode semantics and the regression matrix are complete.
+# 7. Production runtime policy
+Use the complete selected provider for both effects. Keep native NVIDIA frame generation, upstream signature refusal and attribution. Record exact fork commit, build, capability and DLL SHA separately from game verification. The prior custom Off/Auto/Dynamic fork candidate is historical development evidence and is not substituted into either pinned upstream provider.
 
 ---
 
-## 5. Winning architecture — do not regress
 
-The game queries DLSS-G early and can cache the returned function pointers for the lifetime of the process.
+# 8. Native NVIDIA MFG policy
 
-The safe architecture is:
+This is a project-level rule:
+
+> **No hybrid MFG in the supported rtxForge Ada path.**
+
+For RTX 40 / Ada, supported production MFG must remain NVIDIA-generated.
+
+Do not silently substitute:
 
 ```text
-game-native MFG menu
-        |
-        v
-permanent synthetic game-facing slDLSSGSetOptions
-        |
-        | capture primitive request state only
-        v
-NativeDlssgBridgeState
-        |
-        v
-OptiScaler DLSSG_Dx12::Dispatch()
-        |
-        | translate native request into
-        | OptiScaler-owned output state
-        v
-existing normal OptiScaler raw DLSS-G SetOptions push
-        |
-        v
-real NVIDIA DLSS-G / MFG output
+FSR frame generation
+DLSSG-to-FSR-generated extra frames
+hybrid NVIDIA + FSR MFG
+OptiFG-style alternate generation
+another non-NVIDIA backend
 ```
 
-Mental model:
+A research package may contain such components upstream.
 
-> **The game's Streamline instance is the controller; OptiScaler's own DLSS-G instance is the renderer. Do not try to make the controller become the renderer.**
+That does not authorize rtxForge to enable them in the supported Ada production route.
 
-### Non-negotiable callback rule
-
-The cached game-facing `slDLSSGSetOptions` pointer must remain synthetic permanently.
-
-Do not:
-
-- switch the cached callback from synthetic to real later
-- forward that cached callback directly into real DLSS-G
-- call `hkslDLSSGSetOptions()` from `hkslSetConstants()`
-- create a second raw DLSS-G SetOptions call merely to consume the bridge
-
-The successful design consumes native control state through the existing OptiScaler output path.
+If a package bundles multiple FG backends, the worker must verify which one is actually active before calling the result native NVIDIA MFG.
 
 ---
 
-## 6. Native bridge state
-
-Current bridge concept:
-
-```cpp
-struct NativeDlssgBridgeState
-{
-    std::mutex mutex;
-
-    bool valid = false;
-    uint32_t viewport = 0;
-    uint32_t structVersion = 0;
-    uint32_t mode = 0;
-    uint32_t numFramesToGenerate = 1;
-    uint32_t dynamicTargetFrameRate = 0;
-
-    uint64_t generation = 0;
-    uint64_t lastConsumedGeneration = 0;
-};
-```
-
-Synthetic SetOptions:
-
-- safely copies supported older structure layouts
-- captures primitive values only
-- increments generation when the request changes
-- returns `sl::Result::eOk`
-- never calls real DLSS-G
-
-Synthetic GetState:
-
-- remains synthetic
-- exposes enough capability to reveal native 2X/3X/4X on the explicitly enabled RTXForge Ada route
-- should not blindly mirror every unlocked internal maximum without a reason
-
-v3e also has a consume helper so a generation handled by the output dispatcher is not unexpectedly consumed later by the older hook-side bridge path.
+# 9. Neural Rendering
+The y4my provider uses multipass / dual-feature NR with DLSS enlargement. It requires a locally supplied or suitable existing NR model, and refuses missing models before game mutation. The DLSS-Unlocked provider uses its complete pinned package and pre-SR NR settings. Never transplant NR files between these providers. Effect startup is controlled by the explicit Settings switch. No runtime success has been inferred from packaging.
 
 ---
 
-## 7. Experiment history and failure boundaries
+# 10. Provider/package model
 
-Do not repeat these dead ends without new evidence.
+The default supported provider is the currently verified rtxForge production stack.
 
-### v2 / v2a — failed
-
-Early synthetic callbacks later forwarded/switched into real DLSS-G callbacks.
-
-Result: fatal.
-
-Meaning: TOW2 does not tolerate that cached-pointer lifecycle transition safely.
-
-### v2b — safe boot base
-
-Cached GetState and SetOptions remained synthetic permanently.
-
-Result: full boot.
-
-Meaning: permanent synthetic callbacks are the safe foundation.
-
-### v2c — selector mapping proof
-
-Permanent synthetic callbacks plus request capture.
-
-Result: boot and mapping proved:
+Conceptual provider classes:
 
 ```text
-2X -> 1
-3X -> 2
-4X -> 3
+Official rtxForge production stack
+Community provider
+Experimental / unverified provider
 ```
 
-### v3 / v3a — wrong consumers
+Do not silently downgrade from the supported production stack.
 
-Attempts to consume/probe from other Streamline hook paths did not provide the usable runtime boundary.
+Do not expose arbitrary repository URLs as a normal install workflow.
 
-### v3b — useful diagnostic only
+Future community providers should be manifest-driven.
 
-A canary in `hkslSetConstants` saw every pending generation.
-
-That proved observation, not safe apply.
-
-### v3c — failed apply and key lesson
-
-Attempt: when SetConstants saw a pending generation, call `hkslDLSSGSetOptions()`.
-
-Observed boundary:
+A provider manifest should identify:
 
 ```text
-MfgUnlock::TryApply succeeded
-        ↓
-native request captured
-        ↓
-hkslSetConstants sees request
-        ↓
-v3c dispatch begins
-        ↓
-hkslDLSSGSetOptions logs bridged request
-        ↓
-process dies before dispatch result returns
-```
-
-Meaning:
-
-> `SetConstants` being active does not make it a safe place to re-enter DLSS-G.
-
-The unlock had already succeeded, so do not blame `MfgUnlock::TryApply()` for this failure without new evidence.
-
-### v3d — correct consumer identified
-
-Removed v3c re-entry and observed the bridge from `DLSSG_Dx12::Dispatch()`.
-
-Result:
-
-- every pending native generation appeared inside OptiScaler's actual DLSS-G output dispatcher
-- source viewport `1`
-- OptiScaler output viewport `0`
-- `_maxInterpolationCount=5`
-- configured output count remained `1`
-
-The viewport difference is valid because the game-native instance is the control source and OptiScaler's own instance is the output generator.
-
-### v3e — working apply
-
-Instead of making a new Streamline call:
-
-1. Read the newest native bridge generation inside `DLSSG_Dx12::Dispatch()`.
-2. For native `sl::DLSSGMode::eOn`:
-   - read `numFramesToGenerate`
-   - preserve explicit interpolation override precedence
-   - clamp the count
-   - write it to `FGDLSSGInterpolationCount` with `set_volatile_value()`
-3. Mark that generation consumed.
-4. Let the existing dispatcher continue normally.
-5. Existing code updates `_framesToInterpolate`, builds `sl::DLSSGOptions`, and performs its normal raw `StreamlineProxy::DLSSGSetOptions()` call.
-
-No second DLSS-G call is introduced.
-
-That is why v3e works where v3c did not.
-
----
-
-## 8. Current v3e runtime changes
-
-The v3e runtime commit changes four files:
-
-```text
-.github/workflows/rtxforge-proton.yml
-OptiScaler/framegen/dlssg/DLSSG_Dx12.cpp
-OptiScaler/hooks/Streamline_Hooks.cpp
-OptiScaler/hooks/Streamline_Hooks.h
-```
-
-Behavior:
-
-- runtime capability is `RTXForge.NativeMfgMenu.v3e`
-- native bridge state is read inside the real OptiScaler DLSS-G dispatcher
-- ordinary native `eOn` requests apply `numFramesToGenerate`
-- explicit `FGDLSSGOverrideInterpolationCount` still wins
-- request is clamped
-- output count is written via `FGDLSSGInterpolationCount.set_volatile_value(...)`
-- bridge generation is consumed
-- existing raw DLSS-G output call remains the only real apply call
-- non-`eOn` modes are currently logged/handled without complete semantic translation
-
----
-
-## 9. RTXForge app integration already completed
-
-Do **not** spend another worker cycle redoing AppImage/runtime integration.
-
-The golden v3e runtime is already pinned into RTXForge.
-
-Current pinned provenance:
-
-```text
-RTXForge-MFG commit:
-deca7b7a8f1953de3cf6fe2731ede440b3ddaadf
-
-Capability:
-RTXForge.NativeMfgMenu.v3e
-
-Runtime DLL SHA256:
-95580ebc7d2f562d6d99cd798587f757a51cd7bd52e24b0895c42414c3a3c2e8
-
-GitHub Actions build:
-34455052784
-```
-
-`provider.json`, `docs/proton-runtime-build.json`, `build/accept_runtime.py`, and the bundled loader were updated for v3e.
-
-`runtime_verified=false` remains intentional.
-
-### Actual local AppImage path
-
-The GNOME desktop launcher uses:
-
-```text
-~/.local/share/rtxforge/application/RTXForge.AppImage
-```
-
-It does **not** launch the convenience copy in `~/Applications`.
-
-A stale AppImage at the wrong path caused one false-negative compatibility test during this session. When rebuilding locally, update or verify the actual launcher target before concluding a new build is active.
-
----
-
-## 10. Forza Horizon 6 compatibility fix
-
-Forza Horizon 6 contains an existing game-side:
-
-```text
-winmm.dll
-SHA256:
-bfe362f716b95b830206a1b986e2e94735691e8d7dd71f9148f7b9cfd3c5f435
-```
-
-Evidence from the active file:
-
-- no OptiScaler marker
-- no adjacent `OptiScaler.ini`
-- PE timestamp reports 2022
-- historical known-working Forza OptiScaler deployments repeatedly used `dxgi.dll`, not this `winmm.dll`
-
-RTXForge originally treated the existing `winmm.dll` as an unowned competing proxy and blocked installation even with **Recognize previous installs** enabled.
-
-App commit:
-
-```text
-70e6d78  Preserve known Forza game-side winmm proxy
-```
-
-The compatibility rule is intentionally exact:
-
-```text
-game identity + filename + SHA256
-```
-
-It preserves this specific Forza `winmm.dll` as an external game-side input and lets RTXForge use a separate proxy, which falls back to `dxgi.dll` for Forza.
-
-Do not weaken this into a global `ignore winmm.dll` rule.
-
-### Result
-
-After the rebuilt AppImage was copied to the actual GNOME launcher path, RTXForge successfully installed the v3e MFG package to Forza Horizon 6 while leaving the game-side `winmm.dll` untouched.
-
-This proves the **installer compatibility fix** worked.
-
-It does **not** yet prove v3e gameplay/runtime behavior in Forza. Treat Forza as a high-value cross-game validation target.
-
-### High On Life 2 Demo
-
-High On Life 2 Demo also exposed an unrecognized proxy-shaped DLL during the library-wide install attempt.
-
-Do not infer it is safe from the Forza result. Fingerprint and classify it independently before adding any exception.
-
----
-
-## 11. Immediate Astra mission
-
-Continue from **v3e**.
-
-Do not reopen the old "how do we make 2X/3X/4X work?" problem unless an actual regression appears.
-
-Immediate goal:
-
-> Finish native The Outer Worlds 2 DLSS-G mode semantics around the already-working 2X/3X/4X bridge without changing the successful apply architecture.
-
-### A. Map native modes precisely
-
-Observed numeric modes include:
-
-```text
-0
-1
-2
-```
-
-Known:
-
-```text
-mode=1
-```
-
-is the ordinary active MFG mode used by working 2X/3X/4X selections.
-
-Do not assign user-facing meanings to `0` and `2` by guess. Map them with controlled native-menu tests.
-
-A startup capture with:
-
-```text
-mode=2
-numFramesToGenerate=1
-```
-
-has been observed; v3e deliberately did not apply it.
-
-### B. Implement Off / Auto / Dynamic through the existing output path
-
-Do not solve these with an additional Streamline invocation.
-
-Preserve:
-
-```text
-native game state
-        ↓
-bridge
-        ↓
-DLSSG_Dx12::Dispatch
-        ↓
-modify state/options the existing dispatcher is already about to send
-        ↓
-existing raw StreamlineProxy::DLSSGSetOptions()
-```
-
-### C. Preserve explicit override precedence
-
-An explicit RTXForge/OptiScaler interpolation override must continue to win over the native game multiplier.
-
-### D. One conceptual variable per experiment
-
-Do not simultaneously alter mode translation, callback lifetime, unlock behavior, NR, Reflex behavior, and output route. Change one thing, build, test, preserve the log.
-
----
-
-## 12. Validation required before `runtime_verified=true`
-
-At minimum:
-
-- cold launch
-- launch with each relevant native menu state
-- repeated 2X / 3X / 4X transitions
-- 4X -> 2X
-- 2X -> 4X
-- native Off
-- native Auto/Dynamic if exposed
-- explicit interpolation override precedence
-- menu open/close
-- save/load or equivalent gameplay transition
-- longer gameplay session
-- normal shutdown
-- MFG unlock still applies
-- no new fatal
-- no `Couldn't set DLSSG options`
-- NR remains disabled during MFG-only validation
-- no regression to known-good MFG-only behavior
-
-After TOW2 is stable, test the same architecture in at least one additional native Streamline MFG game. **Forza Horizon 6 is already installed with v3e and is a strong next target.**
-
-Only after controlled validation succeeds should app/runtime provenance move to:
-
-```text
-runtime_verified=true
+source
+exact version/commit
+asset
+hashes
+layout
+license/provenance
+capabilities
+GPU/API support
+conflicts
+verification state
+install/uninstall behavior
 ```
 
 ---
 
-## 13. Runtime experiment discipline
+# 11. App ownership/adoption lifecycle
 
-For each RTXForge-MFG experiment:
-
-```text
-verify exact source HEAD
--> change one conceptual variable
--> git diff --check
--> commit
--> push
--> identify the exact GitHub Actions run for that commit
--> download the exact artifact
--> verify PE/MZ, fork_commit, capability, SHA256, compiled marker
--> back up live proxy DLL
--> deploy exact artifact
--> verify live SHA256
--> test in a real game
--> preserve relevant log
-```
-
-Compilation, CI, metadata verification, and deployment are not runtime success.
-
----
-
-## 14. App behavior that must be preserved
-
-### Adoption lifecycle hotfix
-
-Correct state model:
+Preserve the managed-state model:
 
 ```text
 CLEAN
-No recognizable OptiScaler install
-No active managed stack
+no recognizable active external stack
 -> fresh install
 
 MANAGED
-Managed manifest + managed files present
--> repair/change profile/uninstall
+rtxForge manifest + managed files exist
+-> repair / profile change / uninstall
 
 EXTERNAL
-Recognizable external OptiScaler proxy + INI present
-No valid RTXForge ownership
+recognizable external runtime exists
+no valid rtxForge ownership
 -> adoption may be offered
 ```
 
 Rules:
 
-- historical state alone must never force adoption
-- clean post-uninstall games must be installable again
-- adoption requires a recognizable external OptiScaler proxy and INI that exist now
-- incomplete external installs are not silently adopted
-- CLI says `ADOPT` only when adoption actually occurred
-- do not show a misleading "enable Recognize previous installs" message when the setting is already enabled; if recognition fails, report the actual reason
+```text
+historical state alone never forces adoption
+clean post-uninstall games remain installable
+adoption requires recognizable files that exist now
+incomplete external installs are not silently adopted
+messages report the real conflict/recognition reason
+```
 
-Still desired:
+---
 
-- Deep Clean state normalization
-- Install -> Uninstall -> Install integration fixture
-- Steam Verify / externally removed managed-files integration coverage
-
-### Prepared-package cache self-healing
+# 12. Prepared-package cache
 
 Prepared payloads are disposable derived cache.
 
@@ -742,177 +285,409 @@ Correct behavior:
 valid payload + matching manifest
 -> reuse
 
-listing / manifest / payload drift
--> do not trust cache
--> remove invalid derived payload/manifest only
--> keep pinned source archive
--> verify source archive hash
+manifest/listing/payload drift
+-> reject derived cache
+-> delete only invalid derived payload/manifest
+-> retain pinned source archive
+-> verify source archive
 -> rebuild extraction
--> regenerate files.json
+-> regenerate file manifest
 -> verify rebuilt payload
 -> continue
 ```
 
-Readonly/dry-run stays non-mutating and should report that normal Prepare/Install is required to repair stale derived cache.
-
 Security rule:
 
-> Self-healing must never mean accepting drift.
+> **Self-healing must never mean accepting drift.**
+
+Readonly/dry-run remains non-mutating.
 
 ---
 
-## 15. Product/UI backlog
+# 13. Game-specific compatibility knowledge
 
-These are product requirements. Do not destabilize runtime work as collateral UI work unless a separate worker is assigned.
+Only active/current exceptions belong here.
 
-### Library cards/details
+## Forza Horizon 6 historical exception
 
-- reduce unnecessary hero-art padding
-- use artwork-derived accent tones more strongly in detail views
-- universal profile/status badges such as `NR + MFG`, `MFG`, `Unavailable`
-- expose useful applied-state information: profile, active fixes, compatibility notes, runtime status, test status
-- prefer compatibility/configuration metadata over decorative genre metadata when space is limited
-- add game description where useful
-- add **Open Directory**
-- add **Launch Game**
-- keep SteamGridDB credit unobtrusive
-- improve Non-Steam title -> likely Steam App ID matching when confidence is high
+Known game-side file:
 
-### Install-profile controls
-
-- `NR + MFG` before `MFG`
-- make active profile visually obvious
-- keep profile/status color language consistent across cards, filters, and details
-
-### Library density/scrolling
-
-- smaller library-view pills
-- roughly 2–2.5 poster rows visible by default
-- collapse/condense large header on scroll
-- avoid oversized permanent chrome
-
-### Progress/status presentation
-
-Replace the disliked full-width status bar with a smaller, clearer floating/compact progress surface. Tasteful animation is okay; clarity wins.
-
-### Integrated game testing
-
-Desired Test workflow:
-
-1. choose Test on a game
-2. record runtime/profile/config identity
-3. launch the game
-4. capture relevant logs for that test session
-5. stop capture when the game closes
-6. store result against the game
-7. export support ZIP with logs/test record
-
-Investigate Desktop -> Game Mode / Gamescope handoff, but do not promise automatic session switching until proven.
-
-### Troubleshooting notes / Bench
-
-Each game should retain notes, failures, last tested runtime/profile, logs, and current disposition.
-
-Support a Bench workflow that can restore/rollback when the user chooses and temporarily exclude problem games from normal bulk experimentation without deleting their history.
-
-### Library Status / Reports
-
-Provide a report showing working, untested, and benched/problem games; installed profile; test status; notes; latest relevant log; and runtime identity. Allow support-ZIP export.
-
----
-
-## 16. Priority order
-
-### P0 — runtime correctness
-
-1. Preserve v3e.
-2. Map remaining native modes.
-3. Implement Off/Auto/Dynamic through the proven dispatcher architecture.
-4. Run the regression matrix.
-5. Test a second native Streamline MFG title, with Forza as a strong candidate.
-6. Only then consider `runtime_verified=true`.
-7. Update final app/runtime provenance only after validation.
-
-### P1 — NR integration
-
-1. Replace partial NR cherry-pick with complete chosen Proton-working NR path.
-2. Preserve native y4my MFG.
-3. A/B test MFG after NR changes.
-4. Cold-start test NR acceptance.
-
-### P1 — lifecycle hardening
-
-1. Deep Clean state normalization.
-2. Install -> Uninstall -> Install integration test.
-3. Steam Verify / external deletion recovery tests.
-4. Cache self-healing regression tests.
-5. Improve misleading adoption/conflict messaging.
-
-### P2 — product/UI
-
-Implement Section 15 without changing runtime architecture as collateral work.
-
----
-
-## 17. Do-not-regress checklist
-
-1. Keep cached game-facing DLSS-G SetOptions permanently synthetic.
-2. Keep cached GetState synthetic unless a controlled experiment explicitly changes it.
-3. Never directly forward the cached game callback to real DLSS-G.
-4. Never restore v3c's SetConstants -> `hkslDLSSGSetOptions()` re-entry.
-5. Do not add a second bridge-triggered raw DLSS-G SetOptions call.
-6. Consume native request state through the existing OptiScaler DLSS-G output path.
-7. Preserve explicit interpolation-override precedence.
-8. Preserve MFG unlock and max-count behavior.
-9. Keep NR out of MFG validation.
-10. Do not chase Reflex/RSYNC theories without new evidence.
-11. Keep `runtime_verified=false` until controlled validation is finished.
-12. Do not publish final app runtime provenance before behavior is verified.
-13. Do not silently overwrite unrelated local work.
-14. Use one conceptual variable per runtime experiment.
-15. Preserve the golden v3e commit, tag, DLL, hash, and successful log.
-16. Do not make Enabler a dependency/fallback again.
-17. Preserve adoption lifecycle fixes.
-18. Preserve verified cache rebuilding; never "fix" drift by trusting it.
-19. Keep RTXForge Linux/Bazzite/Proton-focused.
-20. Keep MFG and NR separable internally.
-21. Preserve Forza's exact known game-side `winmm.dll`; do not generalize that exception to arbitrary proxy-shaped DLLs.
-22. Remember the actual local GNOME AppImage path when testing rebuilt app versions.
-
----
-
-## 18. Worker startup procedure
-
-At the start of a new worker session:
-
-```bash
-cd ~/Repos/RTXForge
-git fetch origin
-git status --short
-git branch --show-current
-git rev-parse HEAD
-
-cd ~/Repos/RTXForge-MFG
-git fetch origin
-git status --short
-git branch --show-current
-git rev-parse HEAD
-git tag --points-at HEAD
+```text
+winmm.dll
+SHA256:
+bfe362f716b95b830206a1b986e2e94735691e8d7dd71f9148f7b9cfd3c5f435
 ```
 
-Then:
+The compatibility exception was intentionally exact:
 
-1. Read this file completely.
-2. Inspect current repo state before assuming any handoff HEAD is still current.
-3. If RTXForge-MFG moved past v3e, read every intervening commit before editing.
-4. Confirm the golden tag still resolves to the v3e checkpoint.
-5. Do not redo AppImage v3e integration or rediscover the Forza proxy conflict; those are already handled.
-6. Continue the highest-priority unfinished item.
-7. Do not ask the user to repeat context already recorded here.
-8. Never claim runtime success without a real game test.
+```text
+game identity + filename + SHA256
+```
+
+Do not generalize this into “ignore every winmm.dll.”
+
+If the current app/runtime no longer uses this exception, remove this section after verifying it is obsolete.
 
 ---
 
-## 19. Current mission in one sentence
+# 14. Verification philosophy
 
-**Finish and validate native MFG menu semantics around the working v3e bridge, then use Forza Horizon 6 as an important cross-game validation target, while preserving the rule that the game's Streamline instance supplies control state and OptiScaler's own DLSS-G instance performs the real rendering.**
+Compilation, CI, deployment, or reaching a title screen are not runtime verification.
+
+For runtime experiments:
+
+```text
+verify exact source
+change one conceptual variable
+build exact commit
+identify exact artifact
+verify provenance/hash
+back up live files
+deploy exact artifact
+verify live hash where practical
+test in a real game
+preserve relevant result/log
+```
+
+Support states:
+
+```text
+VERIFIED
+COMMUNITY VERIFIED
+SUPPORTED / UNVERIFIED
+EXPERIMENTAL
+UNSUPPORTED
+```
+
+Never claim success without real game testing.
+
+Maintain separate verification records for:
+
+```text
+exact runtime hash / game / feature / test result
+```
+
+Historical results do not automatically verify a new build.
+
+---
+
+# 15. Production validation targets
+
+For native MFG, validate as applicable:
+
+```text
+cold launch
+native 2X / 3X / 4X
+repeated multiplier transitions
+Off
+Auto/Dynamic if exposed
+menu open/close
+save/load or comparable transition
+longer gameplay session
+normal shutdown
+no DLSS-G SetOptions failures
+native NVIDIA backend confirmed
+```
+
+For combined production:
+
+```text
+selected provider NR enabled
+native NVIDIA MFG enabled
+both coexist
+no hidden hybrid FG backend
+performance acceptable
+image quality stable
+clean uninstall/restore
+cross-game validation
+```
+
+---
+
+# 16. Product/UI state
+Implemented: full-ratio posters/capsules, artwork-led details, native Steam launch, folder opening, compact progress, view icons, settings/provider buttons, startup-effects switch, per-game notes, Untested/Working/Problem/Bench status, explicit start/finish test records, bounded adjacent-log capture and support ZIP export. Bench excludes bulk install/repair. Tests are user-recorded, not automatic evidence. Existing tests persist across app restarts; finish capture is manual.
+
+Outstanding: confident Non-Steam metadata matching, automatic session completion across desktop/Game Mode, independently updateable provider catalog, controlled game validation, native KDE frontend. No Windows client.
+
+---
+
+# 17. Naming/branding rules
+
+Product:
+
+```text
+rtxForge
+```
+
+New machine namespace:
+
+```text
+rtxForge.*
+```
+
+Examples:
+
+```text
+rtxForge.NativeMfgMenu.v4
+rtxForge.DlssNr.Proton.v1
+rtxForge.StreamlineBridge.v1
+```
+
+Experimental iterations may use:
+
+```text
+v4a
+v4b
+v4c
+```
+
+Stable contract becomes:
+
+```text
+v4
+```
+
+Historical `RTXForge.*` IDs/tags remain historical.
+
+Do not rewrite old provenance just for casing.
+
+---
+
+# 18. Mass Effect release naming
+
+Major-ish public releases get Mass Effect codenames.
+
+The major version establishes an era, but minor releases do not need a rigid family tree.
+
+Example:
+
+```text
+rtxForge 1.0 — Normandy
+rtxForge 1.1 — Afterlife
+rtxForge 1.2 — Charge
+rtxForge 1.3 — Singularity
+rtxForge 1.4 — Calibrations
+rtxForge 1.5 — Omega-4
+rtxForge 1.6 — Silversun
+rtxForge 1.7 — Solus' Wrath
+```
+
+Patch releases normally get no new codename.
+
+Valid sources include:
+
+```text
+characters
+cities
+bars/clubs
+stores
+manufacturers
+ships
+weapons
+biotic powers
+tech powers
+missions
+factions
+species sayings
+deep-cut jokes
+original elcor-style phrases
+```
+
+Names should fit the personality of the release.
+
+If the fit cannot be explained in one sentence, pick another.
+
+Internal projects may be sillier.
+
+Permanent prohibition:
+
+```text
+Miranda
+```
+
+No appeals process.
+
+---
+
+# 19. Attribution and lineage
+
+For shipped third-party/community work:
+
+```text
+preserve license obligations
+preserve authorship
+credit upstream
+record meaningful provenance
+```
+
+Current production documentation must distinguish:
+
+```text
+DLSS-Unlocked upstream
+OptiScaler upstream
+DLSS Enabler/headless where present
+Dagherbou NR work where present
+other bundled upstreams
+rtxForge adaptations
+Nightfall-derived ideas/code
+```
+
+Do not imply that rtxForge invented upstream techniques it integrated.
+
+When appropriate, preserve cherry-pick authorship and provenance.
+
+---
+
+# 20. README policy
+
+The public README describes what ships now.
+
+Do not let it become a worker diary.
+
+Rewrite stale claims instead of stacking corrections.
+
+The README should make clear:
+
+```text
+what rtxForge is
+Linux/Proton scope
+current production runtime lineage
+unified y4my multipass v4 Linux/Proton direction
+native NVIDIA Ada MFG policy
+Neural Rendering
+capability/support state
+safety/backups/rollback
+installation/use
+known limitations
+verification philosophy
+credits/provenance
+non-affiliation
+```
+
+Project Nightfall may appear in a short developer/research section.
+
+Normal users do not need to understand Nightfall to use rtxForge.
+
+---
+
+# 21. Current priorities
+
+Workers must verify these against the actual repo before acting.
+
+Delete completed items.
+
+## P0 — production
+
+```text
+verify both complete provider integrations
+make Proton/Bazzite loading repeatable
+make NR cold-start and runtime behavior reliable
+ensure Ada MFG path is actual NVIDIA MFG
+validate NR + MFG together
+harden install/uninstall/rollback
+cross-game validate
+surface clear per-game state in rtxForge
+```
+
+## P1 — shared lifecycle
+
+Verify which remain open:
+
+```text
+Deep Clean normalization
+Install -> Uninstall -> Install coverage
+Steam Verify / external deletion recovery
+cache self-healing regression coverage
+recognition/adoption/conflict messaging
+```
+
+## P2 — UI/product
+
+Use Section 16.
+
+Cross-game validation is delegated to Lauren; do not launch games during this implementation task.
+
+---
+
+# 22. Do-not-regress checklist
+- Two explicit complete providers; no hidden mixing, hybrid FG or fallback.
+- y4my model remains local; DLSS-Unlocked uses its declared upstream package. No NVIDIA DLLs rehosted in our release.
+- Preserve signature refusal, ownership, backups, drift checks and rollback.
+- Do not claim runtime verification from compilation or file hashes.
+- Preserve unrelated source and game state; no unsolicited fleet deployment.
+- Preserve upstream licenses and historical tags.
+- Keep WORKER_CONTEXT and NOTES current; no duplicate handoffs.
+- Never use Miranda as a release name.
+
+---
+
+
+# 23. NOTES.md contract
+
+`NOTES.md` is the user's scratchpad/inbox.
+
+The user may put anything there.
+
+Workers must read it at startup.
+
+For each note:
+
+```text
+durable fact
+-> verify if needed
+-> fold into WORKER_CONTEXT.md
+-> remove from NOTES.md once safely represented
+
+real task/requirement
+-> capture in the live priority/task system
+-> remove from NOTES.md once safely represented
+
+resolved/irrelevant
+-> remove
+
+ambiguous user note
+-> preserve until its meaning is clear
+```
+
+Do not silently discard ambiguous user-authored notes.
+
+Do not turn `NOTES.md` into another permanent backlog or archive.
+
+---
+
+# 24. Worker closeout
+
+Before substantial work is declared complete:
+
+```text
+[ ] actual repo state verified
+[ ] actual runtime/provider selection verified
+[ ] real tests performed where required
+[ ] WORKER_CONTEXT updated
+[ ] stale active instructions removed
+[ ] NOTES.md processed
+[ ] priorities contain only unfinished work
+[ ] provenance preserved
+[ ] no new handoff document created
+```
+
+---
+
+# 25. Current mission
+Deliver 0.5.0 with the shared RC1.38-derived engine and pinned provider selection. Lauren performs game validation. No live deployment follows from the code correction. Upstream runtime/menu semantics are inherited from the selected pin; historical custom v4 changes are not silently transplanted.
+
+---
+
+
+## Current observed failure and limits — 2026-09-14
+Lauren reports RC1.38 games do not start and the previous uninstall removed built-in 2x FG across the library. The available PRAGMATA log shows older active DLSS-G output and RSYNC / Present failures; it does not prove the latest dormant build executed. Cyberpunk currently has native DLSS-G/Streamline files and no installed OptiScaler proxy. Restored terminal receipts inspected do not list native root DLSS-G files as originals/managed entries and contain no NVAPI/NVCUDA tokens. Do not claim the library is repaired: no live changes or game launches were performed.
+
+Uninstall now refuses native root NVIDIA/Streamline deletion without original backup authority. Existing preserve-only native capability environment behavior remains. GUI reports launch-sync errors instead of declaring full success.
+
+
+## 0.5.0 packaging checkpoint — 2026-09-14
+The GUI, root terminal launcher, START HERE and AppImage --cli use the same provider adapter. Full imported suite: 276 passed plus 10 subtests; final focused regressions: 4 passed. Actual pinned payload install/restore fixtures passed for y4my MFG Only and DLSS-Unlocked MFG Only / NR + MFG, preserving native DLL bytes. Packaged CLI and GTK smoke checks passed. These are software/package checks, not game-launch validation.
+
+The desktop refuses hidden interactive/sudo operations and requires Steam closed. Legacy Undo now also refuses deleting native NVIDIA/Streamline DLLs without original backup records. DLSS-Unlocked uses its own NR model while backing up/restoring an existing model; y4my retains local-model preference. Hardware installation gate is currently RTX 40/Ada; do not enable Ada unlock on RTX 50 by misclassifying it.
+
+Outstanding: user game launch/native 2x recovery validation; investigate missing FG from actual post-uninstall logs/settings before proposing changes; independent provider update UI/flow; arbitrary repositories; automated test lifecycle monitoring; further runtime Off/Auto/Dynamic behavior only after identifying the selected provider's behavior. The previous custom fork's historical milestones remain reference.

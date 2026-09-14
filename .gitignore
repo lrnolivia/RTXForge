@@ -2,3 +2,4 @@ __pycache__/
 *.py[cod]
 dist/
 bundled-loader/
+engine/imported-rc1.38/

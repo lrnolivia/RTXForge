@@ -1,14 +1,7 @@
-# Source provenance
+# Provenance
 
-RTXForge builds from the user-supplied `OptiScaler-NR-MFG-BAZZITE-v3.0-STABLE-HEADLESS-PROTON-DOUBLE-CLICK.zip`.
+Current provider sources, exact release URLs, branch commits and archive hashes are recorded in `providers/lock.json` (checked 2026-09-14). y4my is pinned to v4 / 7b7220bbb499; DLSS-Unlocked to NR-v0.8.6 / 00fbc5873363. Neither is marked runtime-verified.
 
-SHA-256: `3767da35b0756638c1741b181deaa9a0668c1962bc828e346dbb364a4a15cd00`.
+The transaction engine derives from the user-supplied RC1.38 archive. Original source/archive hashes and adaptation location are in `engine/SOURCE.json`. The AppImage packages this source and the desktop adapter; provider DLLs are downloaded and verified separately. Upstream license files are retained with provider payloads.
 
-Read-only library discovery and the desktop launcher derive from that supplied release. Transaction helpers derive from the preserved local 1.6 work. New orchestration, profiles, payload handling and cleanup are maintained here. No new blanket license is asserted over third-party code.
-
-Upstream binaries retain their own licenses and notices:
-
-- [y4my OptiScaler fork](https://github.com/y4my4my4m/OptiScaler_DLSSNR_Multipass_MFG), pinned to commit `7b7220bbb4994a9c8ae60cfc75a44cb67995efb8` and release `v10.0.0-dev-fork-y4my4my4m-v4`.
-- [dlss-unlocked](https://github.com/ShyVortex/dlss-unlocked/releases/tag/v0.3.0), version 0.3.0, supplies the separately pinned NR forwarder, patched root model, private NR runtime and NR Streamline plugin. Enabler components are excluded.
-
-`provider.json` contains the exact archive hashes, y4my core identity, native Streamline/DLSS-G route policy and NR member SHA256 identities. DLL payloads are downloaded from upstream rather than included in the RTXForge source archive. This project is not an NVIDIA product or endorsement.
+`provider.json` also retains legacy desktop compatibility and storage fields. Its historical runtime/NR fields do not select the 0.5.0 installation payload; `providers/lock.json` does. Historical custom runtime tags, logs and release documents remain historical evidence.

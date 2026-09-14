@@ -1,28 +1,9 @@
-# RTXForge 0.4.2 — GNOME library
+# Desktop integration
 
-Extract the ZIP and double-click **RUN RTXFORGE GUI**. The CLI is still available.
+The GTK4/libadwaita UI is in `gui/rtxforge_gtk.py`. Library discovery remains toolkit-independent. `scripts/engine_bridge.py` adapts the imported transaction engine for both selected providers. Install, repair and uninstall prepare explicit previews; application occurs only after the action is confirmed.
 
-- Unified Steam and added-folder library; tall posters by default.
-- Keyless SteamGridDB artwork, Steam metadata and artwork fallback, local caching, creator attribution in game details. No account, API key or credential is required.
-- Solid neutral colors. Settings switch between posters, wide capsules and list, and change artwork size, dark preference, default profile, cache lifetime, request timeout, metadata and recognition of previous installs.
-- Profile buttons replace dropdowns. Selected actions use floating review panels.
-- **Install entire library** and **Uninstall entire library** are immediate one-click operations: they prepare and apply wherever possible, reporting skipped games. They cover all libraries regardless of search or filter. Backups and drift checks remain enabled. Uninstall removes identified OptiScaler components, not the games or saves.
-- **Select all** selects every game, including games hidden by a filter. Ineligible installs are skipped during checks.
-- Settings includes Undo previous changes and the retained global NR cleanup.
-- Hardware detection checks x86-64 Linux, an accessible NVIDIA driver, a GeForce RTX 40/50-series GPU and 7-Zip. Install/repair is unavailable if those prerequisites cannot be verified; uninstall remains available. Hardware success is not runtime proof for any particular game.
-- The custom repository controls in Settings are disabled UI placeholders only. No custom-repository interpretation or switching is implemented.
+Steam must be closed before applying. Desktop workers refuse interactive/elevated terminal operations instead of waiting invisibly. Failures are recorded per game; completed targets keep their recovery baselines.
 
-GTK 4.10+, libadwaita 1.5+ and PyGObject are required. This is the GNOME build; KDE-native integration remains a later stage; the application ships as an AppImage. State/cache/backups continue using the configured Games-drive storage in provider.json.
+Settings selects provider and startup activation. NR + MFG and MFG Only remain the only installation profiles. Test status, notes and manually bounded log capture live outside games in the configured report storage. Bench suppresses bulk install/repair; explicit selection remains available.
 
-SteamGridDB artwork uses its website's anonymous public search endpoints, verified live without authentication. Those website interfaces can change; failures fall back to Steam or a placeholder and never block installation. Network requests are bounded; metadata never drives installation or executable selection. Covers are fetched at runtime, not redistributed in this ZIP.
-
-The verified custom loader still hides the NR panel in MFG Only. NR + MFG starts NR enabled and retains the panel.
-
-Verification was limited to syntax, GUI rendering/navigation and existing desktop fixture checks. Six actual title posters were retrieved from SteamGridDB with no credentials. No installed games were modified. Extended testing was deliberately deferred at the user's request.
-
-The graphics-runtime-manager handoff is archived under docs/deferred and explicitly **not active work**.
-
-
-## Current MFG route
-
-New generic installs default to native Streamline DLSS-G with the y4my Ada MFG unlock (`FGInput=dlssg`, `FGOutput=dlssg`, `FGNvngxReplacement=none`). Enabler is not included. Review panels now report the selected MFG route; installed-game details report the detected route from `OptiScaler.ini`.
+Older desktop Undo remains a compatibility path for prior installation records. The native-FG safeguards described in the 0.5.0 release apply to the new engine; they cannot reconstruct missing originals from older uninstalls.

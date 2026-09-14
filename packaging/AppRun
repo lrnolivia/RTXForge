@@ -4,4 +4,8 @@ root="${APPDIR:?}/usr/share/rtxforge"
 if [ "${1:-}" = --install ]; then
     exec /usr/bin/python3 -B "$root/scripts/desktop_install.py"
 fi
+if [ "${1:-}" = --cli ]; then
+    shift
+    exec /usr/bin/python3 -B "$root/scripts/engine_cli.py" "$@"
+fi
 exec /usr/bin/python3 -B "$root/gui/rtxforge_gtk.py" "$@"
